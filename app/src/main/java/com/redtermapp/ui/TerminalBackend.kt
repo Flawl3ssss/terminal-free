@@ -32,6 +32,11 @@ class TerminalBackend(
     var onBellFired: (() -> Unit)? = null
     var onLinkTap: ((String, Boolean) -> Unit)? = null
 
+    /** Set by the activity: the reliable way to raise the soft keyboard. */
+    var onRequestKeyboard: ((TerminalView) -> Unit)? = null
+    /** Set by the activity: whether the IME is currently on screen. */
+    var imeVisibleProvider: (() -> Boolean)? = null
+
     override fun onTextChanged(session: TerminalSession) {
         if (invalidatePending) return
         invalidatePending = true
@@ -106,18 +111,31 @@ class TerminalBackend(
         val session = view.mTermSession
         if (session != null && !view.isSelectingText) {
             val link = detectLinkAt(e)
-            if (link != null) {
-                onLinkTap?.invoke(link.first, link.second)
+            if (link != null && !link.second) {
+                // A real URL opens a dialog - do not raise the IME under it.
+                onLinkTap?.invoke(link.first, false)
                 return
+            }
+            if (link != null) {
+                // Tapping a path only copies it (toast, no dialog), so
+                // fall through and raise the keyboard: this used to be the
+                // reason the IME never appeared when tapping the prompt,
+                // which is always full of paths like /workspace.
+                onLinkTap?.invoke(link.first, true)
             }
         }
         view.requestFocus()
-        view.post {
-            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-            if (imm == null) return@post
-            val otherActive = splitViews.any { it !== view && imm.isActive(it) }
-            if (!otherActive && !imm.isActive(view)) {
-                imm.showSoftInput(view, 0)
+        val requestKeyboard = onRequestKeyboard
+        if (requestKeyboard != null) {
+            requestKeyboard.invoke(view)
+        } else {
+            view.post {
+                val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                if (imm == null) return@post
+                val otherActive = splitViews.any { it !== view && imm.isActive(it) }
+                if (!otherActive && !imm.isActive(view)) {
+                    imm.showSoftInput(view, 0)
+                }
             }
         }
         onTap?.invoke()
@@ -159,7 +177,12 @@ class TerminalBackend(
         return null
     }
 
-    override fun shouldBackButtonBeMappedToEscape(): Boolean = true
+    /**
+     * Back closes the keyboard while it is up (the IME consumes it), and only
+     * acts as ESC when the keyboard is hidden - otherwise there would be no
+     * way at all to dismiss the IME from a terminal.
+     */
+    override fun shouldBackButtonBeMappedToEscape(): Boolean = imeVisibleProvider?.invoke() != true
     override fun shouldEnforceCharBasedInput(): Boolean = true
     override fun shouldUseCtrlSpaceWorkaround(): Boolean = true
     override fun isTerminalViewSelected(): Boolean = true
@@ -201,7 +224,26 @@ class TerminalBackend(
     fun setShift(v: Boolean) { shiftDown = v }
     fun setFn(v: Boolean) { fnDown = v }
 
-    override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean = false
+    override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
+        // The modifier values are already captured by TerminalView before this
+        // callback, so releasing a latched CTRL/ALT here still lets the current
+        // key go out modified - and the next key starts clean. Without this a
+        // forgotten latch would keep typing control codes.
+        if (ctrlActive || altActive) releaseModifiers()
+        return false
+    }
+
+    /** Drops a latched CTRL/ALT and repaints the extra-keys row. */
+    fun releaseModifiers() {
+        if (!ctrlActive && !altActive) return
+        ctrlActive = false
+        altActive = false
+        setCtrl(false)
+        setAlt(false)
+        onModifiersChanged?.invoke()
+    }
+
+    var onModifiersChanged: (() -> Unit)? = null
 
     override fun onEmulatorSet() {}
 

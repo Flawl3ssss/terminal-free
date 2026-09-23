@@ -65,6 +65,9 @@ class DistroInstaller(private val context: Context) {
             fixupDirectoryPermissions(rootfsDir)
             setupRootfs(rootfsDir, distro)
             saveInstalled(distro.name)
+            // The base image is unpacked now - keeping the .tar.xz around
+            // would waste ~93 MB of app-private storage forever.
+            dropTarball(distro.name)
             Log.i("DistroInstaller", "Install complete for ${distro.name}")
         } catch (e: CancelledException) {
             Log.i("DistroInstaller", "Install cancelled for ${distro.name}")
@@ -82,6 +85,31 @@ class DistroInstaller(private val context: Context) {
 
     fun hasCachedTarball(distroName: String): Boolean =
         File(tarballDir(), "$distroName.tar.xz").exists()
+
+    private fun dropTarball(distroName: String) {
+        try { File(tarballDir(), "$distroName.tar.xz").delete() } catch (_: Exception) {}
+        try { File(context.cacheDir, "$distroName.tar.xz").delete() } catch (_: Exception) {}
+    }
+
+    /**
+     * Removes leftover base images (they are useless once the rootfs has been
+     * extracted - about 93 MB per distro). Tarballs younger than [maxAgeMs]
+     * are kept, which protects a download that is still in progress.
+     */
+    fun purgeStaleTarballs(maxAgeMs: Long = 10 * 60 * 1000L) {
+        val now = System.currentTimeMillis()
+        val stale = { f: File ->
+            f.isFile && f.name.endsWith(".tar.xz") && now - f.lastModified() > maxAgeMs
+        }
+        tarballDir().listFiles()?.forEach { f ->
+            if (stale(f)) {
+                try { f.delete() } catch (_: Exception) {}
+            }
+        }
+        try {
+            context.cacheDir.listFiles()?.forEach { f -> if (stale(f)) f.delete() }
+        } catch (_: Exception) {}
+    }
 
     /**
      * Restores a distro to its freshly extracted state: wipes installed
@@ -113,6 +141,7 @@ class DistroInstaller(private val context: Context) {
             fixupDirectoryPermissions(rootfsDir)
             setupRootfs(rootfsDir, distro)
             saveInstalled(distroName)
+            dropTarball(distroName)
             Log.i("DistroInstaller", "Reset complete for $distroName")
             true
         } catch (e: CancelledException) {

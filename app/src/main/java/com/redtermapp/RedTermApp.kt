@@ -24,6 +24,15 @@ class RedTermApp : Application() {
             com.github.anrwatchdog.ANRWatchDog().start()
         }
         createNotificationChannel()
+
+        // Drop leftover base images (~93 MB each) from older versions on a
+        // background thread - they are not needed once the rootfs exists.
+        Thread {
+            try {
+                com.redtermapp.distro.DistroInstaller(this).purgeStaleTarballs()
+            } catch (_: Exception) {
+            }
+        }.start()
     }
 
     private fun createNotificationChannel() {

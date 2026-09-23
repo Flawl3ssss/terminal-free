@@ -52,6 +52,12 @@ class TerminalActivity : AppCompatActivity() {
 
     private var terminalBackend: TerminalBackend? = null
     private var currentFontSize = 20
+    private var imeVisible = false
+    private var suppressKeyboardUntil = 0L
+    private var tapDownX = 0f
+    private var tapDownY = 0f
+    private var tapDownAt = 0L
+    private lateinit var keyboardToggle: ImageButton
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
@@ -94,12 +100,18 @@ class TerminalActivity : AppCompatActivity() {
     private fun wireBackend(backend: TerminalBackend) {
         backend.onSessionFinished = { finishedSession -> handleSessionFinished(finishedSession) }
         backend.onLinkTap = { link, isPath -> handleLinkTap(link, isPath) }
+        backend.onModifiersChanged = { updateModifierButtons() }
+        backend.onRequestKeyboard = { target -> showKeyboard(target) }
+        backend.imeVisibleProvider = { imeVisible }
     }
 
     private fun handleLinkTap(link: String, isPath: Boolean) {
         if (isPath) {
             copyText(link)
         } else {
+            // A dialog is about to open: keep the keyboard from popping up
+            // underneath it while the user picks an action.
+            suppressKeyboardUntil = android.os.SystemClock.uptimeMillis() + 500
             android.app.AlertDialog.Builder(this)
                 .setTitle(link)
                 .setItems(arrayOf("Open in browser", "Copy link")) { _, which ->
@@ -173,6 +185,15 @@ class TerminalActivity : AppCompatActivity() {
         if (prefs.getBoolean("autohide_keys", false)) {
             toggleExtraKeys(false)
         }
+
+        keyboardToggle = findViewById(R.id.keyboard_toggle)
+        keyboardToggle.setOnClickListener { toggleKeyboard() }
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { _, insets ->
+            imeVisible = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom > 0
+            updateKeyboardButton()
+            insets
+        }
+        updateKeyboardButton()
 
         findViewById<TextView>(R.id.new_session_button).setOnClickListener {
             createNewSession()
@@ -274,16 +295,26 @@ class TerminalActivity : AppCompatActivity() {
                             action()
                             startKeyRepeat(action)
                         }
-                        false
+                        // Consume the event here. Returning false let it fall
+                        // through to View.onTouchEvent(), which fired
+                        // performClick() a second time - so one tap on CTRL/ALT
+                        // toggled the latch on and immediately back off, while
+                        // ESC/TAB/&& were sent twice.
+                        true
                     }
                     android.view.MotionEvent.ACTION_UP,
                     android.view.MotionEvent.ACTION_CANCEL -> {
-                        v.performClick()
-                        setBackgroundColor(0)
+                        val released = event.action == android.view.MotionEvent.ACTION_UP
                         stopKeyRepeat()
-                        false
+                        if (!repeatable) {
+                            // Clear the press flash BEFORE the click so a latched
+                            // CTRL/ALT can repaint itself in updateModifierButtons().
+                            setBackgroundColor(0)
+                        }
+                        if (released) v.performClick()
+                        true
                     }
-                    else -> false
+                    else -> true
                 }
             }
             if (repeatable) {
@@ -400,7 +431,7 @@ class TerminalActivity : AppCompatActivity() {
         val row1 = findViewById<LinearLayout>(R.id.extra_keys_container)
         for (i in 0 until row1.childCount) {
             val btn = row1.getChildAt(i) as? Button ?: continue
-            when (btn.text) {
+            when (btn.text.toString()) {
                 "CTRL" -> btn.setBackgroundColor(if (ctrlActive) 0xFF45475A.toInt() else 0)
                 "ALT" -> btn.setBackgroundColor(if (altActive) 0xFF45475A.toInt() else 0)
             }
@@ -419,6 +450,98 @@ class TerminalActivity : AppCompatActivity() {
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
         val showing = imm.isActive(terminalView)
         toggleExtraKeys(showing)
+    }
+
+    // ------------------------------------------------------------------
+    // Soft keyboard.
+    //
+    // A single showSoftInput() is silently ignored by several ROMs right
+    // after a focus change, so the call is retried with a stronger flag.
+    // Actual visibility is tracked from the window insets (the only
+    // reliable signal) and drives the floating toggle button.
+    // ------------------------------------------------------------------
+
+    @Suppress("DEPRECATION")
+    private fun showKeyboard(target: View) {
+        if (android.os.SystemClock.uptimeMillis() < suppressKeyboardUntil) return
+        target.isFocusable = true
+        target.isFocusableInTouchMode = true
+        target.requestFocus()
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        val otherActive = TerminalBackend.splitViews.any { it !== target && imm.isActive(it) }
+        if (otherActive) return
+        imm.showSoftInput(target, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        target.postDelayed({
+            if (imeVisible) return@postDelayed
+            imm.showSoftInput(target, 0)
+            target.postDelayed({
+                if (!imeVisible) {
+                    imm.showSoftInput(target, android.view.inputmethod.InputMethodManager.SHOW_FORCED)
+                }
+                updateKeyboardButton()
+            }, 200)
+        }, 150)
+        updateKeyboardButton()
+    }
+
+    private fun hideKeyboard() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        val token = currentFocus?.windowToken ?: focusedTerminalView().windowToken
+        if (token != null) imm.hideSoftInputFromWindow(token, 0)
+        TerminalBackend.splitViews.forEach { v -> imm.hideSoftInputFromWindow(v.windowToken, 0) }
+        updateKeyboardButton()
+    }
+
+    private fun toggleKeyboard() {
+        if (imeVisible) hideKeyboard() else showKeyboard(focusedTerminalView())
+    }
+
+    private fun updateKeyboardButton() {
+        if (!::keyboardToggle.isInitialized) return
+        keyboardToggle.alpha = if (imeVisible) 1.0f else 0.7f
+        val tint = if (imeVisible) {
+            tc(R.attr.colorPrimary, 0xFF89B4FA.toInt())
+        } else {
+            tc(R.attr.terminalText, 0xFFCDD6F4.toInt())
+        }
+        keyboardToggle.imageTintList = android.content.res.ColorStateList.valueOf(tint)
+        keyboardToggle.contentDescription =
+            getString(if (imeVisible) R.string.keyboard_hide else R.string.keyboard_show)
+    }
+
+    /**
+     * Safety net for taps that the terminal itself does not turn into a
+     * keyboard request: a session that has not spawned an emulator yet (the
+     * first seconds after opening) ignores taps completely.
+     */
+    private fun maybeShowKeyboardFromTap(ev: android.view.MotionEvent) {
+        if (imeVisible) return
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - tapDownAt > 600L) return
+        if (now < suppressKeyboardUntil) return
+        if (kotlin.math.hypot((ev.rawX - tapDownX).toDouble(), (ev.rawY - tapDownY).toDouble()) >
+            android.view.ViewConfiguration.get(this).scaledTouchSlop
+        ) return
+        if (panelVisible || drawerLayout.isDrawerOpen(GravityCompat.START)) return
+        val target = focusedTerminalView()
+        if (target.visibility != View.VISIBLE || target.height == 0) return
+        if (terminalView.isSelectingText || target.isSelectingText) return
+
+        val loc = IntArray(2)
+        target.getLocationOnScreen(loc)
+        val lx = ev.rawX - loc[0]
+        val ly = ev.rawY - loc[1]
+        if (lx < 0 || ly < 0 || lx > target.width || ly > target.height) return
+
+        // The floating toggle handles itself - do not race it.
+        if (::keyboardToggle.isInitialized) {
+            val bloc = IntArray(2)
+            keyboardToggle.getLocationOnScreen(bloc)
+            if (ev.rawX >= bloc[0] && ev.rawX <= bloc[0] + keyboardToggle.width &&
+                ev.rawY >= bloc[1] && ev.rawY <= bloc[1] + keyboardToggle.height
+            ) return
+        }
+        showKeyboard(target)
     }
 
     private val session: TerminalSession?
@@ -477,7 +600,7 @@ alias nano='nano -w'
 
             val (pmUpdate, pmInstall, pmQuiet) = when (distro) {
                 "alpine" -> Triple("apk update", "apk add", "-q")
-                "debian", "ubuntu", "kali" -> Triple("apt-get update -qq", "DEBIAN_FRONTEND=noninteractive apt-get install -y", "-qq")
+                "debian", "ubuntu", "kali" -> Triple("apt-get update -qq", "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends", "-qq")
                 "fedora", "rocky", "almalinux" -> Triple("dnf check-update || true", "dnf install -y", "-q")
                 "void" -> Triple("xbps-install -Su", "xbps-install -S", "")
                 "arch", "artix" -> Triple(":", "pacman -S --noconfirm --needed", "")
@@ -486,12 +609,16 @@ alias nano='nano -w'
             }
 
             // Prerequisite packages for the DeepSeek Harness (dsh) toolchain.
+            // Deliberately slim: python3-pip is NOT installed (~40 MB, and dsh
+            // itself is a Node tool) - `apt install python3-pip` brings it
+            // back in one command when a project really needs it. Everything
+            // the harness runs on (git, curl, python3, node/npm) is kept.
             val tfPkgs = when (distro) {
-                "alpine" -> "sudo git curl wget ca-certificates xz unzip zip python3 py3-pip openssh-client procps nano"
-                "debian", "ubuntu", "kali" -> "sudo git curl wget ca-certificates xz-utils unzip zip python3 python3-pip openssh-client procps nano"
-                "fedora", "rocky", "almalinux" -> "sudo git curl wget ca-certificates xz unzip zip python3 python3-pip openssh procps nano"
-                "void" -> "sudo git curl wget ca-certificates xz unzip zip python3 python3-pip openssh procps nano"
-                "arch", "artix", "manjaro" -> "sudo git curl wget ca-certificates xz unzip zip python python-pip openssh nano"
+                "alpine" -> "sudo git curl wget ca-certificates xz unzip zip python3 openssh-client procps nano"
+                "debian", "ubuntu", "kali" -> "sudo git curl wget ca-certificates xz-utils unzip zip python3 openssh-client procps nano"
+                "fedora", "rocky", "almalinux" -> "sudo git curl wget ca-certificates xz unzip zip python3 openssh procps nano"
+                "void" -> "sudo git curl wget ca-certificates xz unzip zip python3 openssh procps nano"
+                "arch", "artix", "manjaro" -> "sudo git curl wget ca-certificates xz unzip zip python openssh nano"
                 else -> "sudo git curl wget ca-certificates unzip zip python3"
             }
 
@@ -514,13 +641,27 @@ alias nano='nano -w'
 """)
             }
             // First-time setup script (ENV): installs prerequisite packages,
-            // Node.js 22 and the DeepSeek Harness (dsh) exactly once. The
-            // marker string below is regenerated if it goes missing, so older
-            // versions of this file are upgraded automatically.
-            val startupText = """# tf-startup-v3 - generated by Terminal Free
+            // Node.js 22 and the DeepSeek Harness (dsh) exactly once, then
+            // runs a one-time space cleanup (apt metadata, docs and caches).
+            // The marker string below is regenerated if it goes missing, so
+            // older versions of this file are upgraded automatically.
+            val startupText = """# tf-startup-v4 - generated by Terminal Free
 export PATH=/opt/node/bin:${'$'}PATH
 export DSH_HOME=/workspace/.dsh
 export DEBIAN_FRONTEND=noninteractive
+# Keep apt small from now on: no recommends/suggests, no package
+# translations, no cached .deb files and no pkgcache.bin/srcpkgcache.bin
+# (109 MB in the stock image) after every apt-get update / dpkg run.
+# This is metadata only - no package or tool is removed.
+mkdir -p /etc/apt/apt.conf.d
+cat > /etc/apt/apt.conf.d/99tf-slim <<'TFCFG'
+APT::Install-Recommends "false";
+APT::Install-Suggests "false";
+Acquire::Languages "none";
+APT::Keep-Downloaded-Packages "false";
+APT::Update::Post-Invoke { "rm -f /var/cache/apt/pkgcache.bin /var/cache/apt/srcpkgcache.bin || true"; };
+DPkg::Post-Invoke { "rm -f /var/cache/apt/pkgcache.bin /var/cache/apt/srcpkgcache.bin || true"; };
+TFCFG
 if [ ! -f /root/.tf_setup_done ]; then
     echo '>>> First-time setup: packages, Node.js and DeepSeek Harness (dsh)...'
     echo '>>> This runs once and may take several minutes.'
@@ -567,12 +708,38 @@ if [ ! -f /root/.tf_setup_done ]; then
         echo '>>> npm not available - dsh install skipped (will retry on the next terminal start).'
     fi
 fi
+# One-time space cleanup (runs after the setup block so it also catches the
+# npm cache left behind by the 500+ package dsh install). Removes apt
+# metadata bloat, package documentation and tool caches - never a package
+# or a working binary.
+if [ ! -f /root/.tf_slim_done ]; then
+    echo '>>> Freeing up space (one-time cleanup)...'
+    apt-get clean 2>/dev/null
+    rm -rf /var/cache/apt/archives/*.deb /var/cache/apt/*.bin 2>/dev/null
+    rm -f /var/lib/apt/lists/*Translation* 2>/dev/null
+    rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* 2>/dev/null
+    rm -rf /usr/share/lintian/* /usr/share/bug/* /usr/share/lintian 2>/dev/null
+    rm -rf /var/log/* /var/tmp/* /tmp/* 2>/dev/null
+    rm -rf /root/.npm /root/.cache 2>/dev/null
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -m pip cache purge >/dev/null 2>&1
+    fi
+    # Trimmed Node: drop headers, docs, tests and corepack (npm stays whole;
+    # if a native module ever needs headers, node-gyp downloads them).
+    rm -rf /opt/node/share /opt/node/include \
+        /opt/node/lib/node_modules/corepack \
+        /opt/node/lib/node_modules/npm/docs /opt/node/lib/node_modules/npm/man \
+        /opt/node/lib/node_modules/npm/test 2>/dev/null
+    rm -f /opt/node/bin/corepack* 2>/dev/null
+    touch /root/.tf_slim_done
+    echo '>>> Cleanup done. (If apt ever says "Unable to locate", run: apt-get update)'
+fi
 if command -v bash >/dev/null 2>&1; then
     exec bash -i
 fi
 """
             val startupFile = File(rootDir, ".startup")
-            if (!startupFile.exists() || !startupFile.readText().contains("# tf-startup-v3")) {
+            if (!startupFile.exists() || !startupFile.readText().contains("# tf-startup-v4")) {
                 startupFile.writeText(startupText)
             }
         } catch (e: Exception) {
@@ -818,7 +985,11 @@ exec $prootBin -0 -L -r "$rp" -w ${startInner ?: "/workspace"} --link2symlink --
     }
 
     private fun closeSession(index: Int) {
-        if (sessions.size <= 1) return
+        if (sessions.size <= 1) {
+            // Never kill the only session from a stray tap - tell the user why.
+            Toast.makeText(this, getString(R.string.session_last_one), Toast.LENGTH_SHORT).show()
+            return
+        }
         sessionModel.removeSession(index)
         if (currentIndex >= 0) {
             terminalView.attachSession(sessions[currentIndex])
@@ -855,12 +1026,21 @@ exec $prootBin -0 -L -r "$rp" -w ${startInner ?: "/workspace"} --link2symlink --
                 addView(LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    setPadding(12, 10, 8, 10)
+                    // A session row is a primary touch target: the old
+                    // 10dp padding plus a 12dp close icon made switching and
+                    // closing sessions nearly impossible to hit.
+                    setPadding(dp(14), dp(12), dp(6), dp(12))
                     addView(TextView(context).apply {
                         text = sessions[i].mSessionName.ifEmpty { "session ${i + 1}" }
                         setTextColor(tc(R.attr.terminalText, 0xFFCDD6F4.toInt()))
-                        textSize = 13f
-                        layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+                        textSize = 15f
+                        maxLines = 1
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                        layoutParams = LinearLayout.LayoutParams(
+                            0,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            1f
+                        ).apply { setMargins(0, 0, dp(8), 0) }
                         setOnLongClickListener {
                             val currentLabel = sessions[i].mSessionName.ifEmpty { "session ${i + 1}" }
                             val input = android.widget.EditText(this@TerminalActivity).apply { setText(currentLabel) }
@@ -879,11 +1059,11 @@ exec $prootBin -0 -L -r "$rp" -w ${startInner ?: "/workspace"} --link2symlink --
                             true
                         }
                     })
-                    val dotSize = dp(12)
+                    val dotSize = dp(10)
                     addView(android.view.View(context).apply {
                         layoutParams = LinearLayout.LayoutParams(dotSize, dotSize).apply {
-                            gravity = Gravity.CENTER
-                            setMargins(0, 0, dp(12), 0)
+                            gravity = Gravity.CENTER_VERTICAL
+                            setMargins(0, 0, dp(10), 0)
                         }
                         background = android.graphics.drawable.GradientDrawable().apply {
                             shape = android.graphics.drawable.GradientDrawable.OVAL
@@ -896,15 +1076,31 @@ exec $prootBin -0 -L -r "$rp" -w ${startInner ?: "/workspace"} --link2symlink --
                         }
                     })
                     addView(ImageView(context).apply {
-                        layoutParams = LinearLayout.LayoutParams(dp(12), dp(12)).apply { gravity = Gravity.CENTER }
+                        // 44dp touch target with a ripple around an 18dp glyph.
+                        layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+                            .apply { gravity = Gravity.CENTER_VERTICAL }
+                        val ripple = obtainStyledAttributes(
+                            intArrayOf(android.R.attr.selectableItemBackgroundBorderless)
+                        )
+                        background = ripple.getDrawable(0)
+                        ripple.recycle()
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        setPadding(dp(13), dp(13), dp(13), dp(13))
                         setImageDrawable(
                             androidx.appcompat.content.res.AppCompatResources.getDrawable(
-                                context, android.R.drawable.ic_menu_close_clear_cancel
+                                context, R.drawable.ic_close
                             )
                         )
-                        imageTintList = android.content.res.ColorStateList.valueOf(0xFF6C7086.toInt())
+                        imageTintList = android.content.res.ColorStateList.valueOf(
+                            if (i == currentIndex) 0xFFA6E3A1.toInt() else 0xFF8A8F9E.toInt()
+                        )
+                        contentDescription = getString(
+                            R.string.session_close_desc,
+                            sessions[i].mSessionName.ifEmpty { "session ${i + 1}" }
+                        )
+                        isClickable = true
+                        isFocusable = true
                         setOnClickListener { closeSession(i) }
-                        setPadding(0, 0, 0, 0)
                     })
                 })
             }
@@ -1002,6 +1198,7 @@ exec $prootBin -0 -L -r "$rp" -w ${startInner ?: "/workspace"} --link2symlink --
         super.onResume()
         terminalView.requestFocus()
         terminalView.onScreenUpdated()
+        updateKeyboardButton()
         titleHandler.postDelayed(titleRunnable, 1000)
     }
 
@@ -1064,15 +1261,39 @@ exec $prootBin -0 -L -r "$rp" -w ${startInner ?: "/workspace"} --link2symlink --
     }
 
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
-        if (ev.action == android.view.MotionEvent.ACTION_DOWN && ev.y < 100 && ev.rawY < 400) {
-            val prefs = getSharedPreferences("settings", MODE_PRIVATE)
-            if (prefs.getBoolean("autohide_keys", false)) {
-                updateExtraKeysVisibility()
+        when (ev.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                tapDownX = ev.rawX
+                tapDownY = ev.rawY
+                tapDownAt = android.os.SystemClock.uptimeMillis()
+                if (ev.y < 100 && ev.rawY < 400) {
+                    val prefs = getSharedPreferences("settings", MODE_PRIVATE)
+                    if (prefs.getBoolean("autohide_keys", false)) {
+                        updateExtraKeysVisibility()
+                    }
+                    toggleQuickPanel()
+                }
             }
-            toggleQuickPanel()
+            android.view.MotionEvent.ACTION_UP -> {
+                // Dispatch first: a tap on a URL inside the terminal opens a
+                // dialog and pushes suppressKeyboardUntil, which is then
+                // respected by maybeShowKeyboardFromTap().
+                val handled = super.dispatchTouchEvent(ev)
+                maybeShowKeyboardFromTap(ev)
+                return handled
+            }
         }
         return super.dispatchTouchEvent(ev)
-    }    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // While the IME is up, Back must dismiss it - TerminalView would
+        // otherwise turn it into ESC and the keyboard could never be closed
+        // from the screen.
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && imeVisible) {
+            if (event.action == KeyEvent.ACTION_DOWN) hideKeyboard()
+            return true
+        }
         if (currentIndex !in sessions.indices) return super.dispatchKeyEvent(event)
         if ((event.keyCode == KeyEvent.KEYCODE_DEL || event.keyCode == KeyEvent.KEYCODE_FORWARD_DEL) &&
             isSearchPanelVisible()) {

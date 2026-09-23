@@ -8,6 +8,9 @@
     <string name="proot_extraction_failed">Proot extraction failed — reinstall app</string>
     <string name="reset_to_default">Reset to default</string>
     <string name="back">Back</string>
+    <string name="keyboard_toggle">Keyboard: show or hide</string>
+    <string name="keyboard_show">Show keyboard</string>
+    <string name="keyboard_hide">Hide keyboard</string>
     <string name="select_distro_to_launch">Select a distro to launch</string>
     <string name="installed_distributions">Installed Distributions</string>
     <string name="add_distribution">+ Add Distribution</string>
@@ -104,6 +107,8 @@
     <string name="distro_size_format">%1$s (%2$s)</string>
     <string name="no_sessions">No sessions</string>
     <string name="session_count_format">%1$d</string>
+    <string name="session_close_desc">Close session %1$s</string>
+    <string name="session_last_one">This is the only session, so it stays open</string>
     <string name="search_match_count_format">%1$d/%2$d</string>
     <string name="no_distributions_for_arch">No distributions available for your device architecture (%1$s)</string>
     <string name="distro_description_format">%1$s\nPackage manager: %2$s</string>
@@ -180,10 +185,28 @@
 
     <!-- Built-in browser -->
     <string name="browser_title">Browser</string>
-    <string name="browser_url_hint">Address</string>
+    <string name="browser_url_hint">Search or enter address</string>
     <string name="browser_go">Go</string>
-    <string name="browser_zoom_out">−</string>
-    <string name="browser_zoom_in">+</string>
-    <string name="browser_reload">⟳</string>
+    <string name="browser_zoom_out">Zoom out</string>
+    <string name="browser_zoom_in">Zoom in</string>
+    <string name="browser_zoom_out_label">−</string>
+    <string name="browser_zoom_in_label">+</string>
+    <string name="browser_zoom_level">100%</string>
+    <string name="browser_zoom_percent">%1$d%%</string>
+    <string name="browser_choose_file">Choose file</string>
+    <string name="browser_reload">Reload</string>
     <string name="browser_back">Back</string>
+    <string name="browser_forward">Forward</string>
+    <string name="browser_stop">Stop loading</string>
+    <string name="browser_find_in_page">Find in page</string>
+    <string name="browser_find_hint">Find in page…</string>
+    <string name="browser_find_count">%1$d/%2$d</string>
+    <string name="browser_find_none">0/0</string>
+    <string name="browser_share">Share</string>
+    <string name="browser_home">Home</string>
+    <string name="browser_zoom_level_default">100%</string>
+    <string name="browser_zoom_reset">Reset zoom to 100%</string>
+    <string name="browser_opened_in_app">Opened in Terminal Free browser</string>
+    <string name="browser_nothing_to_share">Nothing to share yet</string>
+    <string name="browser_load_failed">Could not load page (%1$d)</string>
 </resources>

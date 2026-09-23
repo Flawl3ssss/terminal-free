@@ -141,6 +141,25 @@
                 android:clickable="false"
                 android:focusable="false" />
 
+            <!-- The terminal maps Back to ESC while the IME is hidden, so a
+                 dedicated button is the only way to raise/lower the keyboard
+                 without leaving the session. Sits in the bottom-right thumb
+                 zone, above the extra-keys rows. -->
+            <ImageButton
+                android:id="@+id/keyboard_toggle"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="bottom|end"
+                android:layout_marginEnd="12dp"
+                android:layout_marginBottom="12dp"
+                android:background="@drawable/bg_keyboard_chip"
+                android:contentDescription="@string/keyboard_show"
+                android:elevation="6dp"
+                android:padding="12dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_keyboard"
+                android:alpha="0.75" />
+
             <LinearLayout
                 android:id="@+id/quick_panel"
                 android:layout_width="match_parent"

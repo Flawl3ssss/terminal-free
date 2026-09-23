@@ -54,7 +54,7 @@ jobs:
           mv app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/${NAME}.apk"
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: terminal-free-apk
           path: app/build/outputs/apk/release/TerminalFree-*.apk

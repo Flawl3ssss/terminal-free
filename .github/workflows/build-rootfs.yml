@@ -47,7 +47,7 @@ jobs:
           bash rootfs/build.sh ${{ matrix.arch }} "${{ github.event.inputs.distro || 'ubuntu' }}"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rootfs-${{ matrix.arch }}
           path: output/*.tar.xz

@@ -341,6 +341,38 @@ class DistroInstaller(private val context: Context) {
                 } catch (e: Exception) {
                     Log.w("DistroInstaller", "Symlink failed ${entry.name}: ${e.message}")
                 }
+            } else if (entry.isLink) {
+                // Hardlink (tar type '1'): the entry carries NO data - the
+                // target file must already be in the stream. Writing it as a
+                // regular file produced EMPTY binaries (/usr/bin/env, perl and
+                // every rust-coreutils applet), which broke exec with
+                // "Exec format error". Re-link to the already-extracted file.
+                var linkName = entry.linkName
+                if (prefixToStrip.isNotEmpty() && linkName.startsWith(prefixToStrip)) {
+                    linkName = linkName.removePrefix(prefixToStrip)
+                }
+                linkName = linkName.removePrefix("./").removePrefix("/")
+                val src = File(dest, linkName)
+                target.parentFile?.mkdirs()
+                target.delete()
+                if (src.isFile && src.length() > 0L) {
+                    try {
+                        android.system.Os.link(src.absolutePath, target.absolutePath)
+                    } catch (e: Exception) {
+                        // Fallback: copy the target content.
+                        try {
+                            src.copyTo(target, overwrite = true)
+                            val perm = entry.mode and 0x1FF
+                            target.setReadable(true, true)
+                            target.setExecutable((perm and 0b001001001) != 0, true)
+                            target.setWritable(true, true)
+                        } catch (e2: Exception) {
+                            Log.w("DistroInstaller", "Hardlink failed ${entry.name}: ${e2.message}")
+                        }
+                    }
+                } else {
+                    Log.w("DistroInstaller", "Hardlink target missing for ${entry.name}: $linkName")
+                }
             } else if (entry.isDirectory) {
                 target.mkdirs()
             } else {
@@ -475,6 +507,53 @@ class DistroInstaller(private val context: Context) {
         }
     }
 
+    /**
+     * Heals installs extracted by older app versions: tar hardlinks (type '1')
+     * used to be written as EMPTY files - the rust-coreutils multicall
+     * applets (all hardlinks of csplit) and /usr/bin/perl came out 0 bytes,
+     * so /usr/bin/env failed with "Exec format error" and perl postinst
+     * scripts fell back to being parsed by dash. Re-links anything that is
+     * still an empty file where a populated target is known.
+     */
+    private fun repairEmptyHardlinks(rootfs: File): Int {
+        var fixed = 0
+        fun relink(empty: File, src: File) {
+            if (!empty.isFile || empty.length() != 0L) return
+            if (!src.isFile || src.length() == 0L) return
+            try {
+                empty.delete()
+                android.system.Os.link(src.absolutePath, empty.absolutePath)
+                fixed++
+            } catch (e: Exception) {
+                Log.w("DistroInstaller", "relink ${empty.name} failed: ${e.message}")
+                try {
+                    empty.delete()
+                    src.copyTo(empty, overwrite = true)
+                    empty.setReadable(true, true)
+                    empty.setWritable(true, true)
+                    empty.setExecutable((src.canExecute()), true)
+                    fixed++
+                } catch (_: Exception) {
+                }
+            }
+        }
+
+        // 1) rust-coreutils: every applet under cargo/bin/coreutils is a
+        //    hardlink of the single multicall binary (csplit in our archive).
+        val coreutilsDir = File(rootfs, "usr/lib/cargo/bin/coreutils")
+        val csplit = File(coreutilsDir, "csplit")
+        if (coreutilsDir.isDirectory && csplit.isFile && csplit.length() > 0L) {
+            coreutilsDir.listFiles()?.forEach { f ->
+                if (f.isFile && f.name != "csplit" && f.length() == 0L) relink(f, csplit)
+            }
+        }
+
+        // 2) The multicall alias and perl are hardlinks as well.
+        relink(File(rootfs, "usr/bin/coreutils"), csplit)
+        relink(File(rootfs, "usr/bin/perl"), File(rootfs, "usr/bin/perl5.40.1"))
+        return fixed
+    }
+
     fun repairRootfs(rootfs: File): String {
         val repairs = mutableListOf<String>()
         val uid = android.os.Process.myUid()
@@ -485,6 +564,11 @@ class DistroInstaller(private val context: Context) {
                 File(rootfs, ".perms_fixed").writeText("1")
             } catch (_: Exception) {}
             repairs.add("Fixed directory permissions")
+        }
+
+        val relinked = repairEmptyHardlinks(rootfs)
+        if (relinked > 0) {
+            repairs.add("Repaired $relinked broken hardlinks")
         }
 
         val passwd = File(rootfs, "etc/passwd")

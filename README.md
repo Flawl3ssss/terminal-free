@@ -3,11 +3,37 @@
 Изолированный терминал с Ubuntu 26.04 под PRoot для Android (arm64).
 Работает без root — в основе лежит эмуляция chroot через `proot`.
 
-📦 **Скачать APK**: [TerminalFree-v1.0.0.apk](https://github.com/Flawl3ssss/terminal-free/releases/download/v1.0.0/TerminalFree-v1.0.0.apk)
+📦 **Скачать APK**: [TerminalFree-v1.1.0.apk](https://github.com/Flawl3ssss/terminal-free/releases/download/v1.1.0/TerminalFree-v1.1.0.apk)
 
 - **Изоляция**: контейнер не видит папки телефона. Никаких биндов
   `/sdcard`, `/storage`, `/mnt`, `/data`; приложение не запрашивает
   разрешений на хранилище/медиа, `allowBackup=false`.
+- **DeepSeek Harness (dsh)**: при первом старте терминала в контейнер
+  автоматически ставятся пакеты-предпосылки (git, curl, python3 и др.),
+  Node.js 22 и `@deepseek-ai/dsh` — один раз, с ретраями до успеха
+  (маркер `/root/.tf_setup_done`). Ключ DeepSeek API задаётся в
+  Настройки → DeepSeek Harness и попадает в `$DSH_HOME/.env`
+  (слой с наименьшим приоритетом — ключ, сохранённый в самом dsh,
+  его перекрывает).
+- **Рабочая область `/workspace`**: хост-папка `filesDir/workspace`
+  биндится в контейнер как `/workspace`, сессии стартуют в ней.
+  `DSH_HOME=/workspace/.dsh` — конфиг, плагины и сессии dsh переживают
+  переустановку rootfs.
+- **Файлы туда-сюда**: экран «Files» (меню терминала) — вкладки
+  «Workspace» (хост-папка) и «Device» (папка телефона через системный
+  SAF-пикер, без разрешений на хранилище). Импорт в workspace и экспорт
+  на устройство — копированием через `contentResolver`; контейнер по-прежнему
+  не имеет прямого доступа к файловой системе устройства.
+- **Встроенный браузер**: лёгкий WebView с щипковым зумом и кнопками
+  «− / + / ⟳». Cleartext разрешён только для `127.0.0.1`/`localhost` —
+  им же открывается Web-интерфейс dsh («dsh Web» в меню терминала или
+  кнопка в настройках, сервер `dsh web --no-open --port 3080` запускается
+  автоматически).
+- **Обновление dsh в одну кнопку**: Настройки → «Install / update dsh» —
+  резервная копия `$DSH_HOME` в `/workspace/.tf/backup`, `npm i -g
+  @deepseek-ai/dsh@latest`, проверка запуска; при неудаче — откат на
+  предыдущую версию пакета и восстановление конфига из архива.
+  Живой лог показывается прямо в диалоге.
 - **Оптимизация фона**: по умолчанию — никаких постоянных уведомлений и
   wakelock; свайп приложения из списка задач полностью убивает все процессы
   (сервис + proot + дочерние процессы через `killProcessGroup`).
@@ -27,6 +53,9 @@ TerminalFree (APK, com.terminalfree.app)
         -b  /dev /proc /sys                     ← только системные узлы
         -b  /system /apex /linkerconfig         ← системные файлы Android
                                                   (для bootstrap-шелла)
+        -b  <app-private>/files/workspace:/workspace  ← рабочая область
+                                                  (создаётся и наполняется
+                                                  только самим приложением)
         ✗ НЕ монтируются: /sdcard /storage /mnt /data
         └── /bin/bash (Ubuntu 26.04, из rootfs)
 ```
@@ -48,8 +77,9 @@ TerminalFree (APK, com.terminalfree.app)
 | Кнопка Exit в уведомлении | Грейс-terminate сессий + `killProcessGroup` +自杀-процесса — ноль фоновых процессов. |
 
 Нет: автозапуска по загрузке, циклов JobScheduler/AlarmManager (кроме
-опционального auto-night mode), виджетов, веб-views. В релизе отключён
-ANR-watchdog.
+опционального auto-night mode), виджетов. Встроенный браузер работает
+только по явной команде пользователя (меню → Browser / dsh Web).
+В релизе отключён ANR-watchdog.
 
 ## Сборка через GitHub Actions
 

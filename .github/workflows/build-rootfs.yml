@@ -64,7 +64,7 @@ jobs:
       - name: Install gh
         run: sudo apt-get install -y -qq gh
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true

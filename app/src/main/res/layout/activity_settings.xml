@@ -1,0 +1,863 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/terminalBg"
+    android:fitsSystemWindows="true"
+    android:clipToPadding="false"
+    android:paddingTop="8dp"
+    android:paddingBottom="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="16dp">
+
+            <ImageButton
+                android:id="@+id/settings_back_btn"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_back_chip"
+                android:scaleType="centerInside"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/back" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/app_name"
+                android:textColor="?attr/terminalText"
+                android:textSize="26sp"
+                android:textStyle="bold"
+                android:layout_marginStart="8dp" />
+
+        </LinearLayout>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="?attr/extraKeysBg"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            android:layout_marginBottom="20dp"
+            app:contentPadding="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/installed_distributions"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:drawableStartCompat="@drawable/ic_section_distro"
+                    app:drawableTint="?attr/terminalText"
+                    android:drawablePadding="8dp"
+                    android:layout_marginBottom="12dp" />
+
+                <LinearLayout
+                    android:id="@+id/distro_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:gravity="center"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:onClick="onAddDistroClick"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/add_distribution"
+                        android:textColor="?attr/colorPrimary"
+                        android:textSize="14sp" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/bash_templates_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:gravity="center"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:text="@string/bashrc_templates"
+                        android:textColor="?attr/terminalText"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:text="@string/chevron_right"
+                        android:textColor="?attr/colorPrimary"
+                        android:textSize="18sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="?attr/extraKeysBg"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            android:layout_marginBottom="20dp"
+            app:contentPadding="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/appearance"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:drawableStartCompat="@drawable/ic_section_appearance"
+                    app:drawableTint="?attr/terminalText"
+                    android:drawablePadding="8dp"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/theme"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="14sp"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    app:cardBackgroundColor="?attr/terminalBg"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="0dp"
+                    android:layout_marginBottom="8dp">
+
+                    <FrameLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent">
+
+                        <Spinner
+                            android:id="@+id/theme_spinner"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:spinnerMode="dropdown"
+                            android:background="@android:color/transparent"
+                            android:popupBackground="?attr/terminalBg" />
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="end|center_vertical"
+                            android:layout_marginEnd="12dp"
+                            android:clickable="false"
+                            android:focusable="false"
+                            android:importantForAccessibility="no"
+                            app:srcCompat="@drawable/ic_arrow_down" />
+
+                    </FrameLayout>
+
+                </com.google.android.material.card.MaterialCardView>
+
+                <TextView
+                    android:id="@+id/customize_theme_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="@string/customize_colors"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="14sp"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="?attr/extraKeysBg"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            android:layout_marginBottom="20dp"
+            app:contentPadding="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/font"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:drawableStartCompat="@drawable/ic_section_font"
+                    app:drawableTint="?attr/terminalText"
+                    android:drawablePadding="8dp"
+                    android:layout_marginBottom="12dp" />
+
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    app:cardBackgroundColor="?attr/terminalBg"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="0dp"
+                    android:layout_marginBottom="16dp">
+
+                    <FrameLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent">
+
+                        <Spinner
+                            android:id="@+id/font_spinner"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:spinnerMode="dropdown"
+                            android:background="@android:color/transparent"
+                            android:popupBackground="?attr/terminalBg" />
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="end|center_vertical"
+                            android:layout_marginEnd="12dp"
+                            android:clickable="false"
+                            android:focusable="false"
+                            android:importantForAccessibility="no"
+                            app:srcCompat="@drawable/ic_arrow_down" />
+
+                    </FrameLayout>
+
+                </com.google.android.material.card.MaterialCardView>
+
+                <TextView
+                    android:id="@+id/import_font_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="@string/import_fonts"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="14sp"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginBottom="8dp" />
+
+                <LinearLayout
+                    android:id="@+id/custom_fonts_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/font_size"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="14sp"
+                    android:layout_marginBottom="8dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/font_size_min"
+                        android:textColor="?attr/terminalText"
+                        android:textSize="12sp" />
+
+                    <SeekBar
+                        android:id="@+id/font_size_slider"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:max="40"
+                        android:progress="14"
+                        android:layout_marginHorizontal="8dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/font_size_max"
+                        android:textColor="?attr/terminalText"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="?attr/extraKeysBg"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            android:layout_marginBottom="20dp"
+            app:contentPadding="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/terminal"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:drawableStartCompat="@drawable/ic_section_terminal"
+                    app:drawableTint="?attr/terminalText"
+                    android:drawablePadding="8dp"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/scrollback_lines"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="14sp" />
+
+                <SeekBar
+                    android:id="@+id/scrollback_slider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="9"
+                    android:progress="4"
+                    android:layout_marginBottom="16dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/auto_hide_extra_keys"
+                        android:textColor="?attr/terminalText"
+                        android:textSize="14sp" />
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/autohide_keys_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="false" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/background_opacity"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="14sp" />
+
+                <SeekBar
+                    android:id="@+id/opacity_slider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="10"
+                    android:progress="10"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:id="@+id/export_config_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="@string/export_config"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="14sp"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/import_config_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="@string/import_config"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="14sp"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginTop="8dp" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="?attr/extraKeysBg"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            android:layout_marginBottom="20dp"
+            app:contentPadding="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/power"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:drawableStartCompat="@drawable/ic_section_power"
+                    app:drawableTint="?attr/terminalText"
+                    android:drawablePadding="8dp"
+                    android:layout_marginBottom="16dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/wake_lock"
+                            android:textColor="?attr/terminalText"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/keep_running_in_background"
+                            android:textColor="?attr/terminalText"
+                            android:textSize="12sp"
+                            android:alpha="0.6" />
+
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/wakelock_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="false" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="12dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/bg_mode"
+                            android:textColor="?attr/terminalText"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/bg_mode_desc"
+                            android:textColor="?attr/terminalText"
+                            android:textSize="12sp"
+                            android:alpha="0.6" />
+
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/bg_mode_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="false" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="12dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/kill_on_close"
+                            android:textColor="?attr/terminalText"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/kill_on_close_desc"
+                            android:textColor="?attr/terminalText"
+                            android:textSize="12sp"
+                            android:alpha="0.6" />
+
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/kill_on_close_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingVertical="12dp"
+                    android:layout_marginTop="8dp"
+                    android:background="?attr/terminalBg">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/auto_night_mode"
+                            android:textColor="?attr/terminalText"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/auto_night_mode_desc"
+                            android:textColor="?attr/terminalText"
+                            android:textSize="12sp"
+                            android:alpha="0.6" />
+
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/night_mode_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="false" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingVertical="12dp"
+                    android:background="?attr/terminalBg">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/terminal_bell"
+                            android:textColor="?attr/terminalText"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/terminal_bell_desc"
+                            android:textColor="?attr/terminalText"
+                            android:textSize="12sp"
+                            android:alpha="0.6" />
+
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/bell_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/backup_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="@string/backup_distro"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="14sp"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginTop="12dp" />
+
+                <TextView
+                    android:id="@+id/restore_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="@string/restore_distro"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="14sp"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginTop="8dp" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="12dp"
+            app:cardBackgroundColor="?attr/extraKeysBg"
+            app:cardElevation="0dp"
+            app:cardCornerRadius="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/extra_keys"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    app:drawableStartCompat="@drawable/ic_section_extra_keys"
+                    app:drawableTint="?attr/terminalText"
+                    android:drawablePadding="8dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/extra_keys_desc"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="12sp"
+                    android:alpha="0.6"
+                    android:layout_marginTop="4dp" />
+
+                <android.widget.EditText
+                    android:id="@+id/extra_keys_row1_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:textSize="14sp"
+                    android:textColor="?attr/terminalText"
+                    android:background="@android:drawable/edit_text"
+                    android:hint="@string/row_1_keys"
+                    android:layout_marginTop="12dp" />
+
+                <android.widget.EditText
+                    android:id="@+id/extra_keys_row2_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:textSize="14sp"
+                    android:textColor="?attr/terminalText"
+                    android:background="@android:drawable/edit_text"
+                    android:hint="@string/row_2_keys"
+                    android:layout_marginTop="8dp" />
+
+                <TextView
+                    android:id="@+id/save_extra_keys_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="@string/save_extra_keys"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="14sp"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginTop="12dp" />
+
+                <TextView
+                    android:id="@+id/reset_extra_keys_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="@string/reset_extra_keys"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="14sp"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginTop="8dp" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="12dp"
+            app:cardBackgroundColor="?attr/extraKeysBg"
+            app:cardElevation="0dp"
+            app:cardCornerRadius="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/app_lock"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    app:drawableStartCompat="@drawable/ic_section_app_lock"
+                    app:drawableTint="?attr/terminalText"
+                    android:drawablePadding="8dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/require_pin"
+                            android:textColor="?attr/terminalText"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/pin_desc"
+                            android:textColor="?attr/terminalText"
+                            android:textSize="12sp"
+                            android:alpha="0.6" />
+
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/lock_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="false" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <TextView
+            android:id="@+id/version_info"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/version_label"
+            android:textColor="?attr/terminalText"
+            android:textSize="13sp"
+            android:alpha="0.4"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp" />
+
+    </LinearLayout>
+
+</ScrollView>

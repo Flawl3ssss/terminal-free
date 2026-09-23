@@ -1,0 +1,88 @@
+name: Build APK
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5.6.0
+        with:
+          java-version: "17"
+          distribution: temurin
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      - name: Fix gradle.properties for CI
+        run: sed -i '/android\.aapt2FromMavenOverride/d' gradle.properties
+
+      - name: Decode keystore
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > app/terminal-free.jks
+          fi
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Rename APK
+        run: |
+          mkdir -p app/build/outputs/apk/release
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            NAME="TerminalFree-${GITHUB_REF_NAME}"
+          else
+            NAME="TerminalFree-${GITHUB_RUN_NUMBER}"
+          fi
+          mv app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/${NAME}.apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terminal-free-apk
+          path: app/build/outputs/apk/release/TerminalFree-*.apk
+
+      - name: Extract release notes from changelog
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          ver="${{ github.ref_name }}"
+          awk -v ver="$ver" '
+            BEGIN { insec = 0 }
+            /^## / {
+              line = $0
+              sub(/^## /, "", line)
+              gsub(/[\[\]]/, "", line)
+              if (line == ver || line == "v" ver) { insec = 1; next }
+              else if (insec) { exit }
+            }
+            insec { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            printf 'Release notes for %s.\n\nSee the CHANGELOG for details.' "$ver" > release-notes.md
+          fi
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: Terminal Free ${{ github.ref_name }}
+          artifacts: app/build/outputs/apk/release/TerminalFree-*.apk
+          bodyFile: release-notes.md

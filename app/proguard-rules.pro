@@ -1,0 +1,8 @@
+-keep class org.apache.commons.compress.** { *; }
+-keep class org.tukaani.xz.** { *; }
+-keep class com.redtermapp.DnsHelper { *; }
+-keep class com.redtermapp.util.CrashHandler { *; }
+-keep class com.redtermapp.ui.TerminalViewModel { *; }
+-dontwarn com.github.luben.zstd.**
+-dontwarn org.brotli.dec.**
+-dontwarn org.objectweb.asm.**

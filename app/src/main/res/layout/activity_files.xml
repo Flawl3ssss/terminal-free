@@ -122,20 +122,6 @@
             android:focusable="true" />
 
         <TextView
-            android:id="@+id/files_btn_choose_folder"
-            android:layout_width="wrap_content"
-            android:layout_height="38dp"
-            android:paddingHorizontal="12dp"
-            android:gravity="center"
-            android:text="@string/files_choose_folder"
-            android:textColor="?attr/colorPrimary"
-            android:textSize="13sp"
-            android:background="?attr/terminalBg"
-            android:clickable="true"
-            android:focusable="true"
-            android:visibility="gone" />
-
-        <TextView
             android:id="@+id/files_btn_refresh"
             android:layout_width="wrap_content"
             android:layout_height="38dp"

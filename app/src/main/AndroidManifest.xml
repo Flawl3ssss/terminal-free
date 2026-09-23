@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Isolation model: the app intentionally requests NO storage or media
-         permissions. The proot container never binds /sdcard, /storage, /mnt
-         or /data - only the app-private rootfs, the app-private /workspace
-         (filesDir/workspace) plus /dev, /proc, /sys and read-only Android
-         system files needed by the bootstrap shell. Device files reach the
-         container only through the app's SAF-based file bridge. -->
+    <!-- Isolation model: the proot container never binds /sdcard, /storage,
+         /mnt or /data - only the app-private rootfs, the app-private
+         /workspace (filesDir/workspace) plus /dev, /proc, /sys and read-only
+         Android system files needed by the bootstrap shell.
+
+         The APP itself requests full file access ("All files access") so its
+         own file-manager screen can show ALL device folders and files; device
+         files reach the container only through the app-private /workspace. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -14,6 +17,16 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"
+        tools:ignore="ScopedStorage" />
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="AllFilesAccess" />
 
     <application
         android:name=".RedTermApp"

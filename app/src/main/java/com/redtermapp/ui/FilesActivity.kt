@@ -1,9 +1,14 @@
 package com.redtermapp.ui
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.OpenableColumns
+import android.provider.Settings
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
@@ -18,8 +23,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.edit
-import androidx.documentfile.provider.DocumentFile
+import androidx.core.content.ContextCompat
 import com.redtermapp.R
 import java.io.File
 
@@ -27,10 +31,14 @@ import java.io.File
  * Two-way file bridge between the device and the container's /workspace.
  *
  * Workspace tab: browses filesDir/workspace (host-backed, bind-mounted to
- * /workspace inside proot). Device tab and all import/export operations use
- * the Storage Access Framework (ACTION_OPEN_DOCUMENT_TREE / OPEN_DOCUMENT /
- * CREATE_DOCUMENT) - the app holds NO storage permissions and the container
- * never sees any device filesystem path.
+ * /workspace inside proot).
+ *
+ * Device tab: browses the device storage DIRECTLY with plain java.io.File -
+ * every folder and every file, no folder picking. For that the app requests
+ * full file access: "All files access" (MANAGE_EXTERNAL_STORAGE) on API 30+,
+ * READ/WRITE_EXTERNAL_STORAGE below. The proot container itself still has
+ * zero access to any device path; files cross the boundary only through this
+ * screen (import into /workspace / export out of it).
  */
 class FilesActivity : AppCompatActivity() {
 
@@ -40,19 +48,15 @@ class FilesActivity : AppCompatActivity() {
         val name: String,
         val isDir: Boolean,
         val size: Long,
-        val file: File? = null,
-        val doc: DocumentFile? = null
+        val file: File? = null
     )
 
     private lateinit var wsRoot: File
+    private lateinit var internalRoot: File
     private var wsDir: File? = null
+    private var devDir: File? = null // null = storage-volumes level (root screen)
     private var tab = Tab.WORKSPACE
-    private var treeUri: Uri? = null
-    private var deviceDir: DocumentFile? = null // null = tree root
-
-    private var pendingExportFile: File? = null
-    private var pendingExportDir: File? = null
-    private var pendingTreeAction = 0 // 0 = choose device folder, 1 = export dir
+    private var awaitingAccess = false
 
     private lateinit var listView: ListView
     private lateinit var emptyView: TextView
@@ -60,41 +64,73 @@ class FilesActivity : AppCompatActivity() {
     private lateinit var btnUp: TextView
     private lateinit var btnNewFolder: TextView
     private lateinit var btnImport: TextView
-    private lateinit var btnChooseFolder: TextView
 
     private val entries = mutableListOf<Entry>()
     private lateinit var adapter: EntryAdapter
 
     private fun prefs() = getSharedPreferences("settings", MODE_PRIVATE)
 
-    // ------------------------------------------------------------ launchers
+    // ------------------------------------------------------------- permission
 
-    private val pickTreeLauncher =
-        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-            if (uri != null) {
-                try {
-                    val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    contentResolver.takePersistableUriPermission(uri, flags)
-                } catch (_: Exception) {
-                }
-                prefs().edit { putString("device_tree_uri", uri.toString()) }
-                treeUri = uri
-                deviceDir = null
-                if (pendingTreeAction == 1) {
-                    val dir = pendingExportDir
-                    pendingTreeAction = 0
-                    pendingExportDir = null
-                    dir?.let { doExportDir(it) }
-                } else {
-                    selectTab(Tab.DEVICE)
-                    refresh()
-                }
-            } else {
-                pendingTreeAction = 0
-                pendingExportDir = null
+    private fun hasStorageAccess(): Boolean =
+        if (Build.VERSION.SDK_INT >= 30) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED
+        }
+
+    private val legacyPermLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
+            if (res.values.all { it }) {
+                refresh()
+            } else if (tab == Tab.DEVICE) {
+                Toast.makeText(this, R.string.files_access_denied, Toast.LENGTH_LONG).show()
             }
         }
+
+    /**
+     * Returns true when full storage access is already granted. Otherwise
+     * starts the grant flow (system "All files access" screen on API 30+,
+     * runtime permission dialog below) and returns false.
+     */
+    private fun ensureDeviceAccess(): Boolean {
+        if (hasStorageAccess()) return true
+        if (Build.VERSION.SDK_INT >= 30) {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.files_access_title)
+                .setMessage(R.string.files_access_msg)
+                .setPositiveButton(R.string.files_access_grant) { _, _ ->
+                    awaitingAccess = true
+                    val appIntent = Intent(
+                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    try {
+                        startActivity(appIntent)
+                    } catch (_: Exception) {
+                        try {
+                            startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                        } catch (_: Exception) {
+                            awaitingAccess = false
+                            Toast.makeText(this, R.string.files_access_denied, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        } else {
+            legacyPermLauncher.launch(
+                arrayOf(
+                    Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                )
+            )
+        }
+        return false
+    }
+
+    // ------------------------------------------------------------ launchers
 
     private val pickImportLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -109,16 +145,6 @@ class FilesActivity : AppCompatActivity() {
             }
         }
 
-    private val createDocLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            val src = pendingExportFile
-            pendingExportFile = null
-            val uri = result.data?.data
-            if (result.resultCode == RESULT_OK && uri != null && src != null) {
-                copyOut(src, uri)
-            }
-        }
-
     // ------------------------------------------------------------- lifecycle
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -127,7 +153,7 @@ class FilesActivity : AppCompatActivity() {
 
         wsRoot = File(filesDir, "workspace").apply { mkdirs() }
         wsDir = wsRoot
-        treeUri = prefs().getString("device_tree_uri", null)?.let(Uri::parse)
+        internalRoot = Environment.getExternalStorageDirectory()
 
         adapter = EntryAdapter()
         listView = findViewById(R.id.files_list)
@@ -136,7 +162,6 @@ class FilesActivity : AppCompatActivity() {
         btnUp = findViewById(R.id.files_btn_up)
         btnNewFolder = findViewById(R.id.files_btn_new_folder)
         btnImport = findViewById(R.id.files_btn_import)
-        btnChooseFolder = findViewById(R.id.files_btn_choose_folder)
 
         findViewById<View>(R.id.files_back_btn).setOnClickListener { finish() }
         findViewById<TextView>(R.id.files_tab_workspace).setOnClickListener { selectTab(Tab.WORKSPACE) }
@@ -144,7 +169,6 @@ class FilesActivity : AppCompatActivity() {
         btnUp.setOnClickListener { navigateUp() }
         btnNewFolder.setOnClickListener { newFolderDialog() }
         btnImport.setOnClickListener { pickImport() }
-        btnChooseFolder.setOnClickListener { pickDeviceFolder() }
         findViewById<View>(R.id.files_btn_refresh).setOnClickListener { refresh() }
 
         listView.adapter = adapter
@@ -154,7 +178,11 @@ class FilesActivity : AppCompatActivity() {
         }
         listView.onItemLongClickListener = AdapterView.OnItemLongClickListener { _, _, position, _ ->
             val e = entries.getOrNull(position) ?: return@OnItemLongClickListener false
-            if (e.isDir) { dirActions(e); true } else false
+            if (!e.isDir) return@OnItemLongClickListener false
+            // No per-item actions on the storage-volumes screen (level 0).
+            if (tab == Tab.DEVICE && devDir == null) return@OnItemLongClickListener false
+            dirActions(e)
+            true
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -167,6 +195,14 @@ class FilesActivity : AppCompatActivity() {
         })
 
         selectTab(Tab.WORKSPACE)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (awaitingAccess) {
+            awaitingAccess = false
+            if (hasStorageAccess() && tab == Tab.DEVICE) refresh()
+        }
     }
 
     // ------------------------------------------------------------- rendering
@@ -191,10 +227,10 @@ class FilesActivity : AppCompatActivity() {
         on(tabW, t == Tab.WORKSPACE)
         on(tabD, t == Tab.DEVICE)
 
-        val isWs = t == Tab.WORKSPACE
-        btnNewFolder.visibility = if (isWs) View.VISIBLE else View.GONE
-        btnImport.visibility = if (isWs) View.VISIBLE else View.GONE
-        btnChooseFolder.visibility = if (isWs) View.GONE else View.VISIBLE
+        btnNewFolder.visibility = View.VISIBLE
+        btnImport.visibility = if (t == Tab.WORKSPACE) View.VISIBLE else View.GONE
+
+        if (t == Tab.DEVICE) ensureDeviceAccess()
         refresh()
     }
 
@@ -215,7 +251,7 @@ class FilesActivity : AppCompatActivity() {
         if (empty) {
             emptyView.text = when {
                 tab == Tab.WORKSPACE -> getString(R.string.files_empty_workspace)
-                treeUri == null -> getString(R.string.files_no_device_folder)
+                !hasStorageAccess() -> getString(R.string.files_access_needed)
                 else -> getString(R.string.files_empty_device)
             }
         }
@@ -230,22 +266,49 @@ class FilesActivity : AppCompatActivity() {
         show(list, "/workspace$rel")
     }
 
+    /** All readable storage roots: internal storage first, then SD cards etc. */
+    private fun volumeRoots(): List<File> {
+        val list = mutableListOf(internalRoot)
+        try {
+            File("/storage").listFiles()?.forEach { f ->
+                if (f.name == "self" || f.name == "emulated") return@forEach
+                if (f.isDirectory && f.canRead() && f.path != internalRoot.path) list.add(f)
+            }
+        } catch (_: Exception) {
+        }
+        return list
+    }
+
+    private fun volumeLabel(f: File): String = when {
+        f.path == internalRoot.path -> getString(R.string.files_internal_storage)
+        f.name.matches(Regex("[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}")) ->
+            getString(R.string.files_sd_card, f.name)
+        else -> f.name
+    }
+
+    private fun isVolumeRoot(f: File) = volumeRoots().any { it.path == f.path }
+
     private fun renderDevice() {
-        val uri = treeUri
-        if (uri == null) {
+        if (!hasStorageAccess()) {
             show(emptyList(), getString(R.string.files_device))
             return
         }
+        val dir = devDir
         Thread {
             try {
-                val root = DocumentFile.fromTreeUri(this, uri)
-                    ?: throw IllegalStateException("Cannot open the device folder")
-                val dir = deviceDir ?: root
-                val kids = dir.listFiles().map { d ->
-                    Entry(d.name ?: "?", d.isDirectory, d.length(), doc = d)
+                if (dir == null) {
+                    // Root screen: the list of storage volumes.
+                    val list = volumeRoots().map {
+                        Entry(volumeLabel(it), true, it.length(), file = it)
+                    }
+                    runOnUiThread { show(list, getString(R.string.files_storage)) }
+                } else {
+                    val kids = dir.listFiles()?.map {
+                        Entry(it.name, it.isDirectory, it.length(), file = it)
+                    } ?: emptyList()
+                    val path = dir.absolutePath
+                    runOnUiThread { show(kids, path) }
                 }
-                val title = (if (deviceDir == null) root.name else deviceDir?.name) ?: ""
-                runOnUiThread { show(kids, title) }
             } catch (e: Exception) {
                 runOnUiThread {
                     show(emptyList(), getString(R.string.files_device))
@@ -258,11 +321,8 @@ class FilesActivity : AppCompatActivity() {
     // ----------------------------------------------------------- navigation
 
     private fun openDir(e: Entry) {
-        if (tab == Tab.WORKSPACE) {
-            wsDir = e.file ?: return
-        } else {
-            deviceDir = e.doc ?: return
-        }
+        val f = e.file ?: return
+        if (tab == Tab.WORKSPACE) wsDir = f else devDir = f
         refresh()
     }
 
@@ -275,17 +335,14 @@ class FilesActivity : AppCompatActivity() {
             refresh()
             return true
         }
-        val cur = deviceDir ?: return false
-        return try {
-            val uri = treeUri ?: return false
-            val root = DocumentFile.fromTreeUri(this, uri)
-            val parent = cur.parentFile
-            deviceDir = if (parent == null || root == null || parent.uri == root.uri) null else parent
-            refresh()
-            true
-        } catch (_: Exception) {
-            false
+        val cur = devDir ?: return false
+        devDir = if (isVolumeRoot(cur)) {
+            null // back to the storage-volumes screen
+        } else {
+            cur.parentFile?.takeIf { it.path != "/storage" && it.path != "/" }
         }
+        refresh()
+        return true
     }
 
     // ------------------------------------------------------------- actions
@@ -298,7 +355,7 @@ class FilesActivity : AppCompatActivity() {
                 getString(R.string.delete)
             )
             val actions = arrayOf<() -> Unit>(
-                { exportFile(e) },
+                { exportToDevice(e) },
                 { renameEntry(e) },
                 { confirmDelete(e) }
             )
@@ -309,10 +366,12 @@ class FilesActivity : AppCompatActivity() {
         } else {
             val items = arrayOf(
                 getString(R.string.files_import_action),
+                getString(R.string.rename),
                 getString(R.string.delete)
             )
             val actions = arrayOf<() -> Unit>(
-                { e.doc?.let { doc -> importDeviceDoc(doc) } },
+                { importDeviceEntry(e) },
+                { renameEntry(e) },
                 { confirmDelete(e) }
             )
             AlertDialog.Builder(this).setTitle(e.name)
@@ -330,7 +389,7 @@ class FilesActivity : AppCompatActivity() {
                 getString(R.string.delete)
             )
             val actions = arrayOf<() -> Unit>(
-                { exportDir(e) },
+                { exportToDevice(e) },
                 { renameEntry(e) },
                 { confirmDelete(e) }
             )
@@ -341,10 +400,12 @@ class FilesActivity : AppCompatActivity() {
         } else {
             val items = arrayOf(
                 getString(R.string.files_import_action),
+                getString(R.string.rename),
                 getString(R.string.delete)
             )
             val actions = arrayOf<() -> Unit>(
-                { e.doc?.let { doc -> importDeviceDoc(doc) } },
+                { importDeviceEntry(e) },
+                { renameEntry(e) },
                 { confirmDelete(e) }
             )
             AlertDialog.Builder(this).setTitle(e.name)
@@ -355,12 +416,17 @@ class FilesActivity : AppCompatActivity() {
     }
 
     private fun newFolderDialog() {
+        val target: File? = if (tab == Tab.WORKSPACE) wsDir ?: wsRoot else devDir
+        if (target == null || (tab == Tab.DEVICE && !ensureDeviceAccess())) {
+            Toast.makeText(this, R.string.files_cannot_create_here, Toast.LENGTH_SHORT).show()
+            return
+        }
         val input = EditText(this).apply { hint = getString(R.string.files_folder_name_hint) }
         AlertDialog.Builder(this).setTitle(R.string.files_new_folder).setView(input)
             .setPositiveButton(R.string.files_create) { _, _ ->
                 val name = input.text.toString().trim()
                 if (name.isNotEmpty()) {
-                    val f = File(wsDir ?: wsRoot, name)
+                    val f = File(target, name)
                     if (f.exists()) {
                         Toast.makeText(this, R.string.files_new_folder_exists, Toast.LENGTH_SHORT).show()
                     } else {
@@ -374,17 +440,13 @@ class FilesActivity : AppCompatActivity() {
     }
 
     private fun renameEntry(e: Entry) {
+        val f = e.file ?: return
         val input = EditText(this).apply { setText(e.name); selectAll() }
         AlertDialog.Builder(this).setTitle(R.string.files_rename_title).setView(input)
             .setPositiveButton(R.string.rename) { _, _ ->
                 val newName = input.text.toString().trim()
                 if (newName.isEmpty() || newName == e.name) return@setPositiveButton
-                val ok = if (tab == Tab.WORKSPACE) {
-                    val f = e.file ?: return@setPositiveButton
-                    f.renameTo(File(f.parentFile, newName))
-                } else {
-                    e.doc?.renameTo(newName) == true
-                }
+                val ok = f.renameTo(File(f.parentFile, newName))
                 Toast.makeText(
                     this,
                     if (ok) R.string.files_renamed else R.string.files_op_failed,
@@ -397,15 +459,12 @@ class FilesActivity : AppCompatActivity() {
     }
 
     private fun confirmDelete(e: Entry) {
+        val f = e.file ?: return
         AlertDialog.Builder(this).setTitle(R.string.files_delete_title)
             .setMessage(getString(R.string.files_delete_msg, e.name))
             .setPositiveButton(R.string.delete) { _, _ ->
                 Thread {
-                    val ok = if (tab == Tab.WORKSPACE) {
-                        e.file?.deleteRecursively() == true
-                    } else {
-                        e.doc?.delete() == true
-                    }
+                    val ok = f.deleteRecursively()
                     runOnUiThread {
                         Toast.makeText(
                             this,
@@ -422,9 +481,25 @@ class FilesActivity : AppCompatActivity() {
 
     // ------------------------------------------------------- device -> workspace
 
-    private fun pickDeviceFolder() {
-        pendingTreeAction = 0
-        pickTreeLauncher.launch(null)
+    private fun importDeviceEntry(e: Entry) {
+        val src = e.file ?: return
+        val targetBase = wsDir ?: wsRoot
+        Thread {
+            try {
+                val name = copyTo(src, targetBase).name
+                runOnUiThread {
+                    Toast.makeText(this, getString(R.string.files_import_done, name), Toast.LENGTH_SHORT).show()
+                }
+            } catch (ex: Exception) {
+                runOnUiThread {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.files_import_failed, ex.message ?: "?"),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }.start()
     }
 
     private fun pickImport() {
@@ -476,42 +551,6 @@ class FilesActivity : AppCompatActivity() {
         }.start()
     }
 
-    private fun importDeviceDoc(doc: DocumentFile) {
-        val targetBase = wsDir ?: wsRoot
-        Thread {
-            try {
-                val name = importDocInto(doc, targetBase)
-                runOnUiThread {
-                    Toast.makeText(this, getString(R.string.files_import_done, name), Toast.LENGTH_SHORT).show()
-                    if (tab == Tab.WORKSPACE) refresh()
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    Toast.makeText(
-                        this,
-                        getString(R.string.files_import_failed, e.message ?: "?"),
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
-        }.start()
-    }
-
-    private fun importDocInto(doc: DocumentFile, into: File): String {
-        val name = doc.name ?: "import"
-        if (doc.isDirectory) {
-            val dir = uniqueFile(into, name)
-            dir.mkdirs()
-            doc.listFiles().forEach { importDocInto(it, dir) }
-            return dir.name
-        }
-        val target = uniqueFile(into, name)
-        val input = contentResolver.openInputStream(doc.uri)
-            ?: throw IllegalStateException(name)
-        input.use { src -> target.outputStream().use { dst -> src.copyTo(dst) } }
-        return target.name
-    }
-
     private fun displayName(uri: Uri): String {
         contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
             if (c.moveToFirst()) {
@@ -534,33 +573,26 @@ class FilesActivity : AppCompatActivity() {
 
     // ------------------------------------------------------- workspace -> device
 
-    private fun exportFile(e: Entry) {
-        val f = e.file ?: return
-        pendingExportFile = f
-        val ext = f.extension.lowercase()
-        val mime = if (ext.isNotEmpty()) MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) else null
-        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = mime ?: "application/octet-stream"
-            putExtra(Intent.EXTRA_TITLE, f.name)
-        }
-        createDocLauncher.launch(intent)
-    }
-
-    private fun copyOut(src: File, uri: Uri) {
+    private fun exportToDevice(e: Entry) {
+        val src = e.file ?: return
+        if (!ensureDeviceAccess()) return
+        val target = devDir ?: internalRoot
         Thread {
             try {
-                val out = contentResolver.openOutputStream(uri)
-                    ?: throw IllegalStateException(src.name)
-                out.use { dst -> src.inputStream().use { it.copyTo(dst) } }
-                runOnUiThread {
-                    Toast.makeText(this, getString(R.string.files_export_done, src.name), Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
+                val dst = copyTo(src, target)
                 runOnUiThread {
                     Toast.makeText(
                         this,
-                        getString(R.string.files_export_failed, e.message ?: "?"),
+                        getString(R.string.files_export_done, dst.path),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    if (tab == Tab.DEVICE) refresh()
+                }
+            } catch (ex: Exception) {
+                runOnUiThread {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.files_export_failed, ex.message ?: "?"),
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -568,53 +600,17 @@ class FilesActivity : AppCompatActivity() {
         }.start()
     }
 
-    private fun exportDir(e: Entry) {
-        val f = e.file ?: return
-        if (treeUri == null) {
-            pendingTreeAction = 1
-            pendingExportDir = f
-            pickTreeLauncher.launch(null)
-        } else {
-            doExportDir(f)
-        }
-    }
-
-    private fun doExportDir(src: File) {
-        val uri = treeUri ?: return
-        Thread {
-            try {
-                val root = DocumentFile.fromTreeUri(this, uri)
-                    ?: throw IllegalStateException("no folder")
-                val target = root.findFile(src.name) ?: root.createDirectory(src.name)
-                    ?: throw IllegalStateException("cannot create folder")
-                copyIntoDoc(src, target)
-                runOnUiThread {
-                    Toast.makeText(this, getString(R.string.files_export_done, src.name), Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    Toast.makeText(
-                        this,
-                        getString(R.string.files_export_failed, e.message ?: "?"),
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
-        }.start()
-    }
-
-    private fun copyIntoDoc(src: File, dst: DocumentFile) {
+    /** Recursive copy; returns the final destination (renamed on conflict). */
+    private fun copyTo(src: File, into: File): File {
         if (src.isDirectory) {
-            val sub = dst.findFile(src.name) ?: dst.createDirectory(src.name) ?: return
-            src.listFiles()?.forEach { copyIntoDoc(it, sub) }
-        } else {
-            val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(src.extension.lowercase())
-                ?: "application/octet-stream"
-            val out = dst.createFile(mime, src.name) ?: return
-            contentResolver.openOutputStream(out.uri)?.use { os ->
-                src.inputStream().use { it.copyTo(os) }
-            }
+            val dir = uniqueFile(into, src.name)
+            dir.mkdirs()
+            src.listFiles()?.forEach { copyTo(it, dir) }
+            return dir
         }
+        val target = uniqueFile(into, src.name)
+        src.inputStream().use { ins -> target.outputStream().use { dst -> ins.copyTo(dst) } }
+        return target
     }
 
     // -------------------------------------------------------------- adapter

@@ -21,7 +21,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.edit
-import androidx.documentfile.provider.DocumentFile
 import com.google.android.material.card.MaterialCardView
 import com.redtermapp.BuildConfig
 import com.redtermapp.R
@@ -66,20 +65,48 @@ class SettingsActivity : AppCompatActivity() {
         return c
     }
 
-    private val deviceFolderLauncher =
-        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-            if (uri != null) {
+    /**
+     * Full file access status/button. On API 30+ this opens the system
+     * "All files access" screen; below it requests READ/WRITE at runtime.
+     */
+    private val fileAccessPermLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            refreshDeviceFolderLabel()
+        }
+
+    private fun requestFileAccess() {
+        if (hasFullFileAccess()) return
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            val appIntent = Intent(
+                android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            try {
+                startActivity(appIntent)
+            } catch (_: Exception) {
                 try {
-                    val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    contentResolver.takePersistableUriPermission(uri, flags)
+                    startActivity(Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
                 } catch (_: Exception) {
+                    Toast.makeText(this, R.string.files_access_denied, Toast.LENGTH_LONG).show()
                 }
-                getSharedPreferences("settings", Context.MODE_PRIVATE).edit {
-                    putString("device_tree_uri", uri.toString())
-                }
-                refreshDeviceFolderLabel()
             }
+        } else {
+            fileAccessPermLauncher.launch(
+                arrayOf(
+                    android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                )
+            )
+        }
+    }
+
+    private fun hasFullFileAccess(): Boolean =
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            android.os.Environment.isExternalStorageManager()
+        } else {
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -462,7 +489,7 @@ class SettingsActivity : AppCompatActivity() {
         }
         refreshDeviceFolderLabel()
         findViewById<TextView>(R.id.dsh_device_folder_btn).setOnClickListener {
-            deviceFolderLauncher.launch(null)
+            requestFileAccess()
         }
         findViewById<TextView>(R.id.dsh_open_web_btn).setOnClickListener {
             Toast.makeText(this, R.string.dsh_open_web_starting, Toast.LENGTH_SHORT).show()
@@ -501,18 +528,9 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun refreshDeviceFolderLabel() {
         val btn = findViewById<TextView>(R.id.dsh_device_folder_btn) ?: return
-        val uri = getSharedPreferences("settings", Context.MODE_PRIVATE)
-            .getString("device_tree_uri", null)?.let(Uri::parse)
-        btn.text = if (uri == null) {
-            getString(R.string.dsh_device_folder_none)
-        } else {
-            try {
-                DocumentFile.fromTreeUri(this, uri)?.name
-                    ?: getString(R.string.dsh_device_folder_none)
-            } catch (_: Exception) {
-                getString(R.string.dsh_device_folder_none)
-            }
-        }
+        btn.text = getString(
+            if (hasFullFileAccess()) R.string.dsh_file_access_ok else R.string.dsh_device_folder_none
+        )
     }
 
     private fun confirmDshUpdate() {
@@ -834,6 +852,7 @@ class SettingsActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         populateDistroList()
+        refreshDeviceFolderLabel()
     }
 
     private fun customFontFiles(): List<File> =

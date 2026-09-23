@@ -21,10 +21,12 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.edit
+import androidx.documentfile.provider.DocumentFile
 import com.google.android.material.card.MaterialCardView
 import com.redtermapp.BuildConfig
 import com.redtermapp.R
 import com.redtermapp.distro.DistroInstaller
+import com.redtermapp.harness.DshManager
 import com.redtermapp.service.TerminalService
 import java.io.File
 
@@ -63,6 +65,22 @@ class SettingsActivity : AppCompatActivity() {
         ta.recycle()
         return c
     }
+
+    private val deviceFolderLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) {
+                try {
+                    val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    contentResolver.takePersistableUriPermission(uri, flags)
+                } catch (_: Exception) {
+                }
+                getSharedPreferences("settings", Context.MODE_PRIVATE).edit {
+                    putString("device_tree_uri", uri.toString())
+                }
+                refreshDeviceFolderLabel()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyTheme()
@@ -429,7 +447,120 @@ class SettingsActivity : AppCompatActivity() {
                 .show()
         }
 
+        // ---- DeepSeek Harness (dsh) ----
+        refreshDshVersion()
+        val keyInput = findViewById<EditText>(R.id.dsh_api_key_input)
+        DshManager.readApiKey(this)?.let { keyInput.setText(it) }
+        findViewById<TextView>(R.id.dsh_api_key_save_btn).setOnClickListener {
+            val key = keyInput.text.toString().trim()
+            DshManager.saveApiKey(this, key)
+            Toast.makeText(
+                this,
+                if (key.isEmpty()) R.string.dsh_key_cleared else R.string.dsh_key_saved,
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        refreshDeviceFolderLabel()
+        findViewById<TextView>(R.id.dsh_device_folder_btn).setOnClickListener {
+            deviceFolderLauncher.launch(null)
+        }
+        findViewById<TextView>(R.id.dsh_open_web_btn).setOnClickListener {
+            Toast.makeText(this, R.string.dsh_open_web_starting, Toast.LENGTH_SHORT).show()
+            val wait = AlertDialog.Builder(this)
+                .setTitle(R.string.dsh_open_web_starting)
+                .setMessage(R.string.dsh_section_desc)
+                .setCancelable(false)
+                .create()
+            wait.show()
+            DshManager.ensureWebServer(this) { ok, msg ->
+                if (wait.isShowing) wait.dismiss()
+                if (ok) {
+                    BrowserActivity.launch(this, DshManager.WEB_URL)
+                } else {
+                    AlertDialog.Builder(this)
+                        .setTitle(R.string.dsh_open_web_failed)
+                        .setMessage(msg)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                }
+            }
+        }
+        findViewById<TextView>(R.id.dsh_update_btn).setOnClickListener { confirmDshUpdate() }
+
         versionInfo.text = getString(R.string.version_name_format, getString(R.string.app_name), BuildConfig.VERSION_NAME)
+    }
+
+    private fun refreshDshVersion() {
+        val label = findViewById<TextView>(R.id.dsh_version_label) ?: return
+        val v = DshManager.readVersion(this)
+        label.text = getString(
+            R.string.dsh_version_format,
+            v ?: getString(R.string.dsh_not_installed)
+        )
+    }
+
+    private fun refreshDeviceFolderLabel() {
+        val btn = findViewById<TextView>(R.id.dsh_device_folder_btn) ?: return
+        val uri = getSharedPreferences("settings", Context.MODE_PRIVATE)
+            .getString("device_tree_uri", null)?.let(Uri::parse)
+        btn.text = if (uri == null) {
+            getString(R.string.dsh_device_folder_none)
+        } else {
+            try {
+                DocumentFile.fromTreeUri(this, uri)?.name
+                    ?: getString(R.string.dsh_device_folder_none)
+            } catch (_: Exception) {
+                getString(R.string.dsh_device_folder_none)
+            }
+        }
+    }
+
+    private fun confirmDshUpdate() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dsh_update_confirm_title)
+            .setMessage(R.string.dsh_update_confirm_msg)
+            .setPositiveButton(R.string.dsh_update_btn) { _, _ -> runDshUpdate() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun runDshUpdate() {
+        val logView = TextView(this).apply {
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 11f
+            setTextColor(0xFFC8CCD4.toInt())
+            setPadding(32, 24, 32, 24)
+            setTextIsSelectable(true)
+        }
+        val scroll = android.widget.ScrollView(this).apply { addView(logView) }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.dsh_update_title_dialog)
+            .setView(scroll)
+            .setCancelable(false)
+            .setPositiveButton(android.R.string.ok, null)
+            .create()
+        dialog.show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
+        DshManager.update(
+            this,
+            onLine = { line ->
+                logView.append(line)
+                logView.append("\n")
+                scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+            },
+            onDone = { ok, msg ->
+                logView.append("\n")
+                logView.append(msg)
+                logView.append("\n")
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                refreshDshVersion()
+                Toast.makeText(
+                    this,
+                    if (ok) R.string.dsh_update_ok else R.string.dsh_update_fail,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        )
     }
 
     private fun backupDir(): java.io.File {

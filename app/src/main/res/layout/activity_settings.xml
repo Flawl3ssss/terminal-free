@@ -694,6 +694,168 @@
 
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- DeepSeek Harness (dsh) -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="12dp"
+            app:cardBackgroundColor="?attr/terminalBg"
+            app:cardElevation="0dp"
+            app:cardCornerRadius="12dp"
+            android:layout_marginBottom="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/dsh_section"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    app:drawableStartCompat="@drawable/ic_section_dsh"
+                    app:drawableTint="?attr/terminalText"
+                    android:drawablePadding="10dp"
+                    android:gravity="center_vertical" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/dsh_section_desc"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="12sp"
+                    android:alpha="0.6"
+                    android:lineSpacingExtra="2dp"
+                    android:layout_marginTop="6dp" />
+
+                <TextView
+                    android:id="@+id/dsh_version_label"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="13sp"
+                    android:alpha="0.8"
+                    android:layout_marginTop="12dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/dsh_api_key_label"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="14sp"
+                    android:layout_marginTop="14dp" />
+
+                <EditText
+                    android:id="@+id/dsh_api_key_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:hint="@string/dsh_api_key_hint"
+                    android:textColor="?attr/terminalText"
+                    android:textColorHint="?attr/terminalText"
+                    android:textSize="14sp"
+                    android:inputType="textPassword"
+                    android:singleLine="true"
+                    android:layout_marginTop="6dp"
+                    android:background="@android:drawable/edit_text" />
+
+                <TextView
+                    android:id="@+id/dsh_api_key_save_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="@string/dsh_save_key"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="14sp"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginTop="8dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/dsh_api_key_desc"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="12sp"
+                    android:alpha="0.6"
+                    android:lineSpacingExtra="2dp"
+                    android:layout_marginTop="6dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/dsh_device_folder_label"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="14sp"
+                    android:layout_marginTop="14dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/dsh_device_folder_desc"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="12sp"
+                    android:alpha="0.6"
+                    android:lineSpacingExtra="2dp"
+                    android:layout_marginTop="4dp" />
+
+                <TextView
+                    android:id="@+id/dsh_device_folder_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="12dp"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="14sp"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginTop="6dp" />
+
+                <TextView
+                    android:id="@+id/dsh_open_web_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="@string/dsh_open_web"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="14sp"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginTop="12dp" />
+
+                <TextView
+                    android:id="@+id/dsh_update_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="@string/dsh_update_btn"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="14sp"
+                    android:background="?attr/terminalBg"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginTop="8dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/dsh_update_desc"
+                    android:textColor="?attr/terminalText"
+                    android:textSize="12sp"
+                    android:alpha="0.6"
+                    android:lineSpacingExtra="2dp"
+                    android:layout_marginTop="6dp" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

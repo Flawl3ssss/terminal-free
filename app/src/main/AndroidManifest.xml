@@ -3,8 +3,10 @@
 
     <!-- Isolation model: the app intentionally requests NO storage or media
          permissions. The proot container never binds /sdcard, /storage, /mnt
-         or /data - only the app-private rootfs plus /dev, /proc, /sys and
-         read-only Android system files needed by the bootstrap shell. -->
+         or /data - only the app-private rootfs, the app-private /workspace
+         (filesDir/workspace) plus /dev, /proc, /sys and read-only Android
+         system files needed by the bootstrap shell. Device files reach the
+         container only through the app's SAF-based file bridge. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -53,6 +55,19 @@
             android:name=".ui.BashTemplatesActivity"
             android:exported="false"
             android:theme="@style/Theme.RedTermApp" />
+
+        <activity
+            android:name=".ui.FilesActivity"
+            android:exported="false"
+            android:theme="@style/Theme.RedTermApp"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <activity
+            android:name=".ui.BrowserActivity"
+            android:exported="false"
+            android:theme="@style/Theme.RedTermApp"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize" />
 
         <service
             android:name=".ui.QuickSettingsTile"

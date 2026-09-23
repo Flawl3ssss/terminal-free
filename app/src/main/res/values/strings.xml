@@ -49,7 +49,7 @@
     <string name="app_lock">App lock</string>
     <string name="require_pin">Require PIN to open Terminal Free</string>
     <string name="pin_desc">4–8 digit PIN, asked when the app is opened</string>
-    <string name="version_label">Terminal Free v1.0.0</string>
+    <string name="version_label">Terminal Free v1.1.0</string>
     <string name="search_hint">Search…</string>
     <string name="search_count">0/0</string>
     <string name="key_up">▲</string>
@@ -112,4 +112,70 @@
     <string name="distro_installed_format">%1$s installed</string>
     <string name="install_failed_format">Install failed:\n%1$s</string>
     <string name="no_distros_installed_widget">No distros installed. Open RedTerm to install one.</string>
+
+    <!-- DeepSeek Harness (dsh) -->
+    <string name="dsh_section">DeepSeek Harness (dsh)</string>
+    <string name="dsh_section_desc">AI agent that lives inside the container. Installed automatically on the first terminal start; its Web UI opens in the built-in browser.</string>
+    <string name="dsh_version_format">dsh version: %1$s</string>
+    <string name="dsh_not_installed">not installed yet — open a terminal once</string>
+    <string name="dsh_api_key_label">DeepSeek API key</string>
+    <string name="dsh_api_key_hint">sk-…</string>
+    <string name="dsh_api_key_desc">Stored in app-private storage and passed into the container as DEEPSEEK_API_KEY. Restart the terminal session after changing it.</string>
+    <string name="dsh_save_key">Save key</string>
+    <string name="dsh_key_saved">API key saved. Restart the terminal session to apply.</string>
+    <string name="dsh_key_cleared">API key removed.</string>
+    <string name="dsh_key_current">Key saved — enter a new one to replace it</string>
+    <string name="dsh_device_folder_label">Device folder</string>
+    <string name="dsh_device_folder_desc">A device folder for two-way file transfer with /workspace. Uses the system folder picker — no storage permission.</string>
+    <string name="dsh_device_folder_none">Not chosen — tap to select</string>
+    <string name="dsh_open_web">Open dsh Web UI</string>
+    <string name="dsh_update_btn">Install / update dsh</string>
+    <string name="dsh_update_desc">Installs the latest dsh. Config, plugins and sessions live in /workspace/.dsh — they are backed up before the update and restored if anything breaks.</string>
+    <string name="dsh_update_confirm_title">Update dsh?</string>
+    <string name="dsh_update_confirm_msg">The latest version will be installed. Your config, plugins and sessions are backed up first and rolled back automatically on failure.</string>
+    <string name="dsh_update_running">Updating dsh…</string>
+    <string name="dsh_update_ok">dsh updated successfully</string>
+    <string name="dsh_update_fail">dsh update failed — rolled back to the previous version (see log)</string>
+    <string name="dsh_update_title_dialog">dsh update log</string>
+    <string name="dsh_open_web_starting">Starting dsh Web UI…</string>
+    <string name="dsh_open_web_failed">Could not start dsh Web UI</string>
+
+    <!-- Files bridge -->
+    <string name="files_title">Files</string>
+    <string name="files_workspace">Workspace</string>
+    <string name="files_device">Device</string>
+    <string name="files_up">Up</string>
+    <string name="files_new_folder">New folder</string>
+    <string name="files_import">Import</string>
+    <string name="files_refresh">Refresh</string>
+    <string name="files_choose_folder">Choose folder</string>
+    <string name="files_no_device_folder">No device folder chosen yet</string>
+    <string name="files_empty_workspace">Workspace is empty</string>
+    <string name="files_empty_device">Choose a device folder to browse it</string>
+    <string name="files_folder_name_hint">Folder name</string>
+    <string name="files_create">Create</string>
+    <string name="files_export_to_device">Export to device…</string>
+    <string name="files_rename_title">Rename</string>
+    <string name="files_delete_title">Delete</string>
+    <string name="files_delete_msg">Delete \"%1$s\"?</string>
+    <string name="files_import_action">Import to workspace</string>
+    <string name="files_import_done">Imported: %1$s</string>
+    <string name="files_import_failed">Import failed: %1$s</string>
+    <string name="files_export_done">Exported: %1$s</string>
+    <string name="files_export_failed">Export failed: %1$s</string>
+    <string name="files_delete_done">Deleted</string>
+    <string name="files_renamed">Renamed</string>
+    <string name="files_new_folder_exists">A folder with that name already exists</string>
+    <string name="files_folder_label">Folder</string>
+    <string name="files_file_label">File, %1$s</string>
+    <string name="files_op_failed">Operation failed</string>
+
+    <!-- Built-in browser -->
+    <string name="browser_title">Browser</string>
+    <string name="browser_url_hint">Address</string>
+    <string name="browser_go">Go</string>
+    <string name="browser_zoom_out">−</string>
+    <string name="browser_zoom_in">+</string>
+    <string name="browser_reload">⟳</string>
+    <string name="browser_back">Back</string>
 </resources>

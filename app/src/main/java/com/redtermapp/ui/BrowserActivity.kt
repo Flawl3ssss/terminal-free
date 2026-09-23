@@ -72,7 +72,7 @@ class BrowserActivity : AppCompatActivity() {
                 }
             }
 
-            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.drawable.Drawable?) {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 if (url != null && urlInput.text.toString() != url) {
                     urlInput.setText(url)
@@ -81,7 +81,7 @@ class BrowserActivity : AppCompatActivity() {
         }
 
         findViewById<View>(R.id.browser_back_btn).setOnClickListener {
-            if (webView.canGoBack) webView.goBack() else finish()
+            if (webView.canGoBack()) webView.goBack() else finish()
         }
         findViewById<TextView>(R.id.browser_go).setOnClickListener { loadFromInput() }
         urlInput.setOnEditorActionListener { _, actionId, _ ->
@@ -121,7 +121,7 @@ class BrowserActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (webView.canGoBack) webView.goBack() else super.onBackPressed()
+        if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
     }
 
     override fun onPause() {

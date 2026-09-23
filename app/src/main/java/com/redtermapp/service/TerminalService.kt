@@ -197,10 +197,23 @@ class TerminalService : Service() {
     private fun hardKill() {
         // Kill the whole process group so proot and every process inside the
         // container die together with the app - nothing is left behind.
+        // Reflection is used deliberately: Os.getpgid / Process.killProcessGroup
+        // are not part of the public SDK surface on all API levels.
         try {
             val uid = Process.myUid()
-            val pgid = android.system.Os.getpgid(0)
-            android.system.Os.killProcessGroup(uid, pgid)
+            var pgid = Process.myPid()
+            try {
+                val getpgid = Class.forName("android.system.Os")
+                    .getMethod("getpgid", Integer.TYPE)
+                pgid = getpgid.invoke(null, 0) as Int
+            } catch (_: Exception) {
+            }
+            try {
+                val killGroup = Class.forName("android.os.Process")
+                    .getMethod("killProcessGroup", Integer.TYPE, Integer.TYPE)
+                killGroup.invoke(null, uid, pgid)
+            } catch (_: Exception) {
+            }
         } catch (_: Exception) {
         }
         Process.killProcess(Process.myPid())

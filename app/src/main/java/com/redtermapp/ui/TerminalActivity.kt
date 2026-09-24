@@ -24,6 +24,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -422,64 +423,23 @@ class TerminalActivity : AppCompatActivity() {
     }
 
     // ------------------------------------------------------------------
-    // Workspace file picker ("＋" extra key).
-    //
-    // Walks filesDir/workspace (seen by the container as /workspace),
-    // sorted exactly like the Files screen: directories first, then
-    // case-insensitive by name. A tap types the path into the focused
-    // session's current input line; a long tap previews the file
-    // (text / image / SVG) with an "insert path" button.
+    // Path picker ("＋" extra key): opens the FULL file manager screen
+    // in pick mode; tapping a file there returns its path here, and it
+    // gets typed into the focused session (quoted when it has spaces).
     // ------------------------------------------------------------------
 
+    private val pickFileLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val path = result.data?.getStringExtra(FilesActivity.EXTRA_RESULT_PATH)
+            if (result.resultCode == RESULT_OK && !path.isNullOrEmpty()) {
+                var typed = path
+                if (typed.contains(' ')) typed = "'" + typed.replace("'", "'\\''") + "'"
+                focusedSession()?.write(typed)
+            }
+        }
+
     private fun openWorkspacePicker() {
-        val root = File(filesDir, "workspace").apply { mkdirs() }
-        showWorkspacePicker(root, root)
-    }
-
-    private fun showWorkspacePicker(root: File, dir: File) {
-        val rel = dir.absolutePath.removePrefix(root.absolutePath)
-        val sorted = (dir.listFiles()?.toList() ?: emptyList())
-            .sortedWith(compareByDescending<File> { it.isDirectory }.thenBy { it.name.lowercase() })
-        val labels = mutableListOf<String>()
-        val targets = mutableListOf<File>()
-        if (dir != root) {
-            labels.add("..")
-            targets.add(dir.parentFile ?: root)
-        }
-        for (f in sorted) {
-            labels.add(if (f.isDirectory) "${f.name}/" else f.name)
-            targets.add(f)
-        }
-        val dlg = android.app.AlertDialog.Builder(this)
-            .setTitle("/workspace$rel")
-            .setItems(labels.toTypedArray()) { _, which ->
-                val target = targets[which]
-                if (target.isDirectory) {
-                    showWorkspacePicker(root, target)
-                } else {
-                    insertWorkspacePath(root, target)
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-        // Long tap on a file: preview without leaving the picker.
-        dlg.listView?.setOnItemLongClickListener { _, _, pos, _ ->
-            val t = targets.getOrNull(pos)
-            if (t != null && t.isFile) {
-                com.redtermapp.util.FilePreview.show(this, t) { insertWorkspacePath(root, t) }
-                true
-            } else {
-                false
-            }
-        }
-    }
-
-    /** Types the container-visible path (/workspace/...) into the session. */
-    private fun insertWorkspacePath(root: File, f: File) {
-        val relDir = f.parentFile?.absolutePath?.removePrefix(root.absolutePath) ?: ""
-        var path = "/workspace$relDir/${f.name}"
-        if (path.contains(' ')) path = "'" + path.replace("'", "'\\''") + "'"
-        focusedSession()?.write(path)
+        pickFileLauncher.launch(FilesActivity.intent(this, true))
     }
 
     private var ctrlActive = false

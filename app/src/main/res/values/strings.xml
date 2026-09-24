@@ -169,6 +169,15 @@
     <string name="files_create">Create</string>
     <string name="files_export_to_device">Export to device…</string>
     <string name="files_preview">Preview</string>
+    <string name="files_pick_hint">Pick mode: tap a file to insert its path into the terminal</string>
+    <string name="files_sort">Sort by</string>
+    <string name="files_sort_name">Name</string>
+    <string name="files_sort_date">Date</string>
+    <string name="files_sort_size">Size</string>
+    <string name="files_sort_label">Sort: %1$s</string>
+    <string name="files_search">Search</string>
+    <string name="files_search_hint">File or folder name</string>
+    <string name="files_search_empty">No matches</string>
     <string name="files_rename_title">Rename</string>
     <string name="files_delete_title">Delete</string>
     <string name="files_delete_msg">Delete \"%1$s\"?</string>

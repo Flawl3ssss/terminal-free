@@ -7,8 +7,12 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.OpenableColumns
 import android.provider.Settings
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
@@ -16,6 +20,8 @@ import android.webkit.MimeTypeMap
 import android.widget.AdapterView
 import android.widget.BaseAdapter
 import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
@@ -44,6 +50,8 @@ class FilesActivity : AppCompatActivity() {
 
     private enum class Tab { WORKSPACE, DEVICE }
 
+    private enum class SortBy { NAME, DATE, SIZE }
+
     private data class Entry(
         val name: String,
         val isDir: Boolean,
@@ -57,6 +65,12 @@ class FilesActivity : AppCompatActivity() {
     private var devDir: File? = null // null = storage-volumes level (root screen)
     private var tab = Tab.WORKSPACE
     private var awaitingAccess = false
+    private var pickMode = false     // launched by terminal "＋": tap = insert path
+    private var sortBy = SortBy.NAME
+    private var sortDesc = false
+    // Recursive folder sizes for SIZE sorting: absolute path -> bytes.
+    // Guarded by synchronized(sizeCache); cleared on manual refresh / sort change.
+    private val sizeCache = HashMap<String, Long>()
 
     private lateinit var listView: ListView
     private lateinit var emptyView: TextView
@@ -163,18 +177,43 @@ class FilesActivity : AppCompatActivity() {
         btnNewFolder = findViewById(R.id.files_btn_new_folder)
         btnImport = findViewById(R.id.files_btn_import)
 
+        pickMode = intent.getBooleanExtra(EXTRA_PICK_MODE, false)
+        if (pickMode) findViewById<View>(R.id.files_pick_hint).visibility = View.VISIBLE
+        sortBy = try {
+            SortBy.valueOf(prefs().getString("files_sort_by", SortBy.NAME.name) ?: SortBy.NAME.name)
+        } catch (_: Exception) {
+            SortBy.NAME
+        }
+        sortDesc = prefs().getBoolean("files_sort_desc", false)
+        updateSortButtons()
+
         findViewById<View>(R.id.files_back_btn).setOnClickListener { finish() }
         findViewById<TextView>(R.id.files_tab_workspace).setOnClickListener { selectTab(Tab.WORKSPACE) }
         findViewById<TextView>(R.id.files_tab_device).setOnClickListener { selectTab(Tab.DEVICE) }
         btnUp.setOnClickListener { navigateUp() }
         btnNewFolder.setOnClickListener { newFolderDialog() }
         btnImport.setOnClickListener { pickImport() }
-        findViewById<View>(R.id.files_btn_refresh).setOnClickListener { refresh() }
+        findViewById<View>(R.id.files_btn_refresh).setOnClickListener {
+            synchronized(sizeCache) { sizeCache.clear() } // manual refresh re-measures folders
+            refresh()
+        }
+        findViewById<View>(R.id.files_btn_sort).setOnClickListener { sortDialog() }
+        findViewById<View>(R.id.files_btn_sort_dir).setOnClickListener {
+            sortDesc = !sortDesc
+            saveSort()
+            updateSortButtons()
+            refresh()
+        }
+        findViewById<View>(R.id.files_btn_search).setOnClickListener { openSearch() }
 
         listView.adapter = adapter
         listView.onItemClickListener = AdapterView.OnItemClickListener { _, _, position, _ ->
             val e = entries.getOrNull(position) ?: return@OnItemClickListener
-            if (e.isDir) openDir(e) else fileActions(e)
+            when {
+                e.isDir -> openDir(e)
+                pickMode -> returnPicked(e)
+                else -> fileActions(e)
+            }
         }
         listView.onItemLongClickListener = AdapterView.OnItemLongClickListener { _, _, position, _ ->
             val e = entries.getOrNull(position) ?: return@OnItemLongClickListener false
@@ -240,9 +279,7 @@ class FilesActivity : AppCompatActivity() {
 
     private fun show(list: List<Entry>, path: String) {
         entries.clear()
-        entries.addAll(
-            list.sortedWith(compareByDescending<Entry> { it.isDir }.thenBy { it.name.lowercase() })
-        )
+        entries.addAll(list.sortedWith(entryComparator()))
         adapter.notifyDataSetChanged()
         pathView.text = path
         val empty = entries.isEmpty()
@@ -257,13 +294,115 @@ class FilesActivity : AppCompatActivity() {
         }
     }
 
+    // --------------------------------------------------------------- sorting
+
+    /**
+     * Directories stay grouped first (navigation sanity), but inside EACH
+     * group the active criterion AND direction apply - so folders follow the
+     * chosen sort too: by name, by last-modified date or by size, ascending
+     * or descending.
+     */
+    private fun entryComparator(): Comparator<Entry> {
+        val primary: Comparator<Entry> = when (sortBy) {
+            SortBy.NAME -> compareBy<Entry> { it.name.lowercase() }
+            SortBy.DATE -> compareBy<Entry> { it.file?.lastModified() ?: 0L }
+            SortBy.SIZE -> compareBy<Entry> { it.size }
+        }
+        val oriented = if (sortDesc) primary.reversed() else primary
+        return compareByDescending<Entry> { it.isDir }.then(oriented)
+    }
+
+    private fun saveSort() {
+        prefs().edit()
+            .putString("files_sort_by", sortBy.name)
+            .putBoolean("files_sort_desc", sortDesc)
+            .apply()
+    }
+
+    private fun updateSortButtons() {
+        val label = when (sortBy) {
+            SortBy.NAME -> getString(R.string.files_sort_name)
+            SortBy.DATE -> getString(R.string.files_sort_date)
+            SortBy.SIZE -> getString(R.string.files_sort_size)
+        }
+        findViewById<TextView>(R.id.files_btn_sort).text =
+            getString(R.string.files_sort_label, label)
+        findViewById<TextView>(R.id.files_btn_sort_dir).text = if (sortDesc) "↓" else "↑"
+    }
+
+    private fun sortDialog() {
+        val labels = arrayOf(
+            getString(R.string.files_sort_name),
+            getString(R.string.files_sort_date),
+            getString(R.string.files_sort_size)
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.files_sort)
+            .setSingleChoiceItems(labels, sortBy.ordinal) { d, which ->
+                if (which != sortBy.ordinal) {
+                    sortBy = SortBy.values()[which]
+                    synchronized(sizeCache) { sizeCache.clear() }
+                    saveSort()
+                    updateSortButtons()
+                    refresh()
+                }
+                d.dismiss()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
     private fun renderWorkspace() {
         val dir = wsDir ?: wsRoot
-        val list = dir.listFiles()?.map {
-            Entry(it.name, it.isDirectory, it.length(), file = it)
-        } ?: emptyList()
-        val rel = dir.absolutePath.removePrefix(wsRoot.absolutePath)
-        show(list, "/workspace$rel")
+        // Background thread: with SIZE sorting every subdirectory is measured
+        // recursively, which can take a while on big trees.
+        Thread {
+            val list = try {
+                dir.listFiles()?.map { entryFor(it) } ?: emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val rel = dir.absolutePath.removePrefix(wsRoot.absolutePath)
+            runOnUiThread { show(list, "/workspace$rel") }
+        }.start()
+    }
+
+    /** One list entry; directories get a measured (capped) recursive size. */
+    private fun entryFor(f: File) = Entry(
+        name = f.name,
+        isDir = f.isDirectory,
+        size = if (f.isDirectory && sortBy == SortBy.SIZE) folderSize(f) else f.length(),
+        file = f
+    )
+
+    /**
+     * Recursive size of a folder in bytes, capped at [FOLDER_SIZE_CAP]
+     * visited entries so a huge tree can never stall the listing; results
+     * are cached until manual refresh / sort change.
+     */
+    private fun folderSize(dir: File): Long {
+        synchronized(sizeCache) {
+            sizeCache[dir.absolutePath]?.let { return it }
+            var total = 0L
+            var visited = 0
+            val stack = ArrayDeque<File>()
+            stack.addLast(dir)
+            while (stack.isNotEmpty() && visited < FOLDER_SIZE_CAP) {
+                val cur = stack.removeLast()
+                val kids = try {
+                    cur.listFiles()
+                } catch (_: Exception) {
+                    null
+                } ?: continue
+                for (k in kids) {
+                    if (visited >= FOLDER_SIZE_CAP) break
+                    visited++
+                    if (k.isDirectory) stack.addLast(k) else total += k.length()
+                }
+            }
+            sizeCache[dir.absolutePath] = total
+            return total
+        }
     }
 
     /** All readable storage roots: internal storage first, then SD cards etc. */
@@ -299,13 +438,16 @@ class FilesActivity : AppCompatActivity() {
                 if (dir == null) {
                     // Root screen: the list of storage volumes.
                     val list = volumeRoots().map {
-                        Entry(volumeLabel(it), true, it.length(), file = it)
+                        Entry(
+                            volumeLabel(it),
+                            true,
+                            if (sortBy == SortBy.SIZE) folderSize(it) else it.length(),
+                            file = it
+                        )
                     }
                     runOnUiThread { show(list, getString(R.string.files_storage)) }
                 } else {
-                    val kids = dir.listFiles()?.map {
-                        Entry(it.name, it.isDirectory, it.length(), file = it)
-                    } ?: emptyList()
+                    val kids = dir.listFiles()?.map { entryFor(it) } ?: emptyList()
                     val path = dir.absolutePath
                     runOnUiThread { show(kids, path) }
                 }
@@ -343,6 +485,20 @@ class FilesActivity : AppCompatActivity() {
         }
         refresh()
         return true
+    }
+
+    // ------------------------------------------------------------ pick mode
+
+    /** Terminal "＋" flow: hand the tapped file's path back and close. */
+    private fun returnPicked(e: Entry) {
+        val f = e.file ?: return
+        val path = if (tab == Tab.WORKSPACE) {
+            "/workspace" + f.absolutePath.removePrefix(wsRoot.absolutePath)
+        } else {
+            f.absolutePath
+        }
+        setResult(RESULT_OK, Intent().putExtra(EXTRA_RESULT_PATH, path))
+        finish()
     }
 
     // ------------------------------------------------------------- actions
@@ -617,6 +773,200 @@ class FilesActivity : AppCompatActivity() {
         return target
     }
 
+    // --------------------------------------------------------------- search
+
+    private data class SearchHit(val entry: Entry, val displayPath: String)
+
+    /**
+     * Recursive name search from the CURRENT directory of the active tab
+     * (workspace root from the volumes screen of the device tab is not a
+     * thing - there the walk starts at internal storage). Matches folders
+     * and files at any depth and lists them with their full path; typing is
+     * debounced (300 ms), the walk runs off the UI thread with hard caps on
+     * results and visited entries. Tap: dir -> open, file -> pick/actions;
+     * long tap on a file -> preview (with "insert path" in pick mode).
+     */
+    private fun openSearch() {
+        val root: File = if (tab == Tab.WORKSPACE) (wsDir ?: wsRoot) else (devDir ?: internalRoot)
+        val rootLabel = if (tab == Tab.WORKSPACE) {
+            "/workspace" + root.absolutePath.removePrefix(wsRoot.absolutePath)
+        } else {
+            root.absolutePath
+        }
+
+        val hits = mutableListOf<SearchHit>()
+        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val input = EditText(this).apply {
+            hint = getString(R.string.files_search_hint)
+            isSingleLine = true
+            setPadding(24, 16, 24, 8)
+        }
+        val emptyMsg = TextView(this).apply {
+            text = getString(R.string.files_search_empty)
+            gravity = android.view.Gravity.CENTER
+            setPadding(24, 48, 24, 24)
+            setTextColor(attrColor(R.attr.terminalText))
+            textSize = 14f
+            visibility = View.GONE
+        }
+        val resultsList = ListView(this)
+        val rowH = (resources.displayMetrics.density * 360).toInt()
+        val frame = FrameLayout(this).apply {
+            addView(
+                emptyMsg,
+                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowH)
+            )
+            addView(
+                resultsList,
+                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowH)
+            )
+        }
+        column.addView(
+            input,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+        column.addView(
+            frame,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+
+        val searchAdapter = object : BaseAdapter() {
+            override fun getCount() = hits.size
+            override fun getItem(position: Int) = hits[position]
+            override fun getItemId(position: Int) = position.toLong()
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val v = convertView
+                    ?: layoutInflater.inflate(R.layout.item_file_row, parent, false)
+                val h = hits[position]
+                v.findViewById<TextView>(R.id.row_icon).text =
+                    if (h.entry.isDir) "📁" else "📄"
+                v.findViewById<TextView>(R.id.row_name).text = h.entry.name
+                v.findViewById<TextView>(R.id.row_sub).text = h.displayPath
+                return v
+            }
+        }
+        resultsList.adapter = searchAdapter
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.files_search)
+            .setView(column)
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+
+        var alive = true
+        var generation = 0
+        val main = Handler(Looper.getMainLooper())
+        var pending: Runnable? = null
+        dialog.setOnDismissListener {
+            alive = false
+            pending?.let { main.removeCallbacks(it) }
+        }
+
+        fun publish(list: List<SearchHit>, truncated: Boolean) {
+            hits.clear()
+            hits.addAll(list)
+            searchAdapter.notifyDataSetChanged()
+            emptyMsg.visibility = if (hits.isEmpty()) View.VISIBLE else View.GONE
+            val suffix = when {
+                truncated -> " (${hits.size}+)"
+                hits.isNotEmpty() -> " (${hits.size})"
+                else -> ""
+            }
+            dialog.setTitle(getString(R.string.files_search) + suffix)
+        }
+
+        fun runSearch(rawQuery: String) {
+            val query = rawQuery.trim()
+            if (query.isEmpty()) {
+                publish(emptyList(), false)
+                return
+            }
+            val myGen = ++generation
+            Thread {
+                val found = mutableListOf<SearchHit>()
+                var visited = 0
+                val stack = ArrayDeque<Pair<File, String>>() // dir to rel path from root
+                stack.addLast(root to "")
+                while (stack.isNotEmpty() &&
+                    found.size < SEARCH_MAX_RESULTS &&
+                    visited < SEARCH_MAX_VISITED
+                ) {
+                    val (dir, prefix) = stack.removeLast()
+                    val kids = try {
+                        dir.listFiles()
+                    } catch (_: Exception) {
+                        null
+                    } ?: continue
+                    for (k in kids) {
+                        if (found.size >= SEARCH_MAX_RESULTS || visited >= SEARCH_MAX_VISITED) {
+                            break
+                        }
+                        visited++
+                        val rel = if (prefix.isEmpty()) k.name else "$prefix/${k.name}"
+                        if (k.name.contains(query, ignoreCase = true)) {
+                            found.add(
+                                SearchHit(
+                                    Entry(k.name, k.isDirectory, k.length(), file = k),
+                                    "$rootLabel/$rel"
+                                )
+                            )
+                        }
+                        if (k.isDirectory && k.canRead()) stack.addLast(k to rel)
+                    }
+                }
+                val truncated =
+                    found.size >= SEARCH_MAX_RESULTS || visited >= SEARCH_MAX_VISITED
+                val ordered = found.sortedWith(Comparator { a, b ->
+                    entryComparator().compare(a.entry, b.entry)
+                })
+                runOnUiThread {
+                    if (!alive || myGen != generation) return@runOnUiThread
+                    publish(ordered, truncated)
+                }
+            }.start()
+        }
+
+        input.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                pending?.let { main.removeCallbacks(it) }
+                val task = Runnable { runSearch(s?.toString() ?: "") }
+                pending = task
+                main.postDelayed(task, 300)
+            }
+        })
+
+        resultsList.onItemClickListener = AdapterView.OnItemClickListener { _, _, position, _ ->
+            val h = hits.getOrNull(position) ?: return@OnItemClickListener
+            val f = h.entry.file ?: return@OnItemClickListener
+            dialog.dismiss()
+            when {
+                h.entry.isDir -> {
+                    if (tab == Tab.WORKSPACE) wsDir = f else devDir = f
+                    refresh()
+                }
+                pickMode -> returnPicked(h.entry)
+                else -> fileActions(h.entry)
+            }
+        }
+        resultsList.onItemLongClickListener =
+            AdapterView.OnItemLongClickListener { _, _, position, _ ->
+                val h = hits.getOrNull(position) ?: return@OnItemLongClickListener false
+                val f = h.entry.file ?: return@OnItemLongClickListener false
+                if (h.entry.isDir) return@OnItemLongClickListener false
+                val insert: (() -> Unit)? = if (pickMode) ({ returnPicked(h.entry) }) else null
+                com.redtermapp.util.FilePreview.show(this, f, insert)
+                true
+            }
+    }
+
     // -------------------------------------------------------------- adapter
 
     private inner class EntryAdapter : BaseAdapter() {
@@ -640,5 +990,18 @@ class FilesActivity : AppCompatActivity() {
         bytes >= 1L shl 20 -> "%.1f MB".format(bytes / (1024.0 * 1024))
         bytes >= 1L shl 10 -> "%.1f KB".format(bytes / 1024.0)
         else -> "$bytes B"
+    }
+
+    companion object {
+        /** Set true by the terminal "＋" key: tapping a file returns its path. */
+        const val EXTRA_PICK_MODE = "pick_mode"
+        const val EXTRA_RESULT_PATH = "result_path"
+
+        fun intent(context: android.content.Context, pickMode: Boolean): Intent =
+            Intent(context, FilesActivity::class.java).putExtra(EXTRA_PICK_MODE, pickMode)
+
+        private const val FOLDER_SIZE_CAP = 20_000
+        private const val SEARCH_MAX_RESULTS = 300
+        private const val SEARCH_MAX_VISITED = 60_000
     }
 }

@@ -35,6 +35,18 @@
     </LinearLayout>
 
     <TextView
+        android:id="@+id/files_pick_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="6dp"
+        android:text="@string/files_pick_hint"
+        android:textColor="?attr/colorPrimary"
+        android:textSize="12sp"
+        android:background="?attr/extraKeysBg"
+        android:visibility="gone" />
+
+    <TextView
         android:id="@+id/files_path"
         android:layout_width="match_parent"
         android:layout_height="32dp"
@@ -128,6 +140,52 @@
             android:paddingHorizontal="12dp"
             android:gravity="center"
             android:text="@string/files_refresh"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="13sp"
+            android:background="?attr/terminalBg"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="4dp">
+
+        <TextView
+            android:id="@+id/files_btn_sort"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:paddingHorizontal="12dp"
+            android:gravity="center"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="13sp"
+            android:background="?attr/terminalBg"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/files_btn_sort_dir"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:paddingHorizontal="12dp"
+            android:gravity="center"
+            android:text="↓"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="15sp"
+            android:background="?attr/terminalBg"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/files_btn_search"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:paddingHorizontal="12dp"
+            android:gravity="center"
+            android:text="@string/files_search"
             android:textColor="?attr/colorPrimary"
             android:textSize="13sp"
             android:background="?attr/terminalBg"

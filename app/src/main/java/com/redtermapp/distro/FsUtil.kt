@@ -109,4 +109,85 @@ object FsUtil {
         visit(root)
         return converted
     }
+
+    /**
+     * Replaces byte-identical COPIES with symlinks where the image is
+     * *defined* to consist of one file: the rust-coreutils multicall
+     * applets (all copies of csplit) and the coreutils/perl aliases.
+     *
+     * link() was rejected on device and both fallbacks (the extractor and
+     * the empty-hardlink repair) silently did src.copyTo(), so 115 applets
+     * became 1.19 GB of REAL duplicates - which is why du, the app's own
+     * label and Android Settings all honestly agreed on ~1.9 GB.
+     *
+     * Only fixed, well-defined paths are touched, and "identical" means
+     * equal size plus an equal 8 KB head sample - inside these paths every
+     * file is the same binary by construction. Cheap to re-run: after the
+     * first pass everything is a symlink and gets skipped.
+     *
+     * @return how many copies were collapsed.
+     */
+    fun collapseDuplicates(root: File): Int {
+        var collapsed = 0
+        val dir = File(root, "usr/lib/cargo/bin/coreutils")
+        val canonical = File(dir, "csplit")
+        if (dir.isDirectory && canonical.isFile && canonical.length() > 0L) {
+            for (f in dir.listFiles() ?: emptyArray()) {
+                if (f.name == "csplit" || !f.isFile || isSymlink(f)) continue
+                if (looksIdentical(f, canonical)) collapsed += replaceWithSymlink(f, canonical)
+            }
+        }
+        val bin = File(root, "usr/bin")
+        val coreutilsAlias = File(bin, "coreutils")
+        if (coreutilsAlias.isFile && !isSymlink(coreutilsAlias) &&
+            canonical.isFile && looksIdentical(coreutilsAlias, canonical)
+        ) {
+            collapsed += replaceWithSymlink(coreutilsAlias, canonical)
+        }
+        val perl = File(bin, "perl5.40.1")
+        val perlAlias = File(bin, "perl")
+        if (perlAlias.isFile && !isSymlink(perlAlias) &&
+            perl.isFile && looksIdentical(perlAlias, perl)
+        ) {
+            collapsed += replaceWithSymlink(perlAlias, perl)
+        }
+        return collapsed
+    }
+
+    /** Same size + first 8 KB equal - decisive inside these fixed paths. */
+    private fun looksIdentical(a: File, b: File): Boolean {
+        if (a.length() != b.length() || a.length() == 0L) return false
+        return try {
+            val ba = ByteArray(8192)
+            val bb = ByteArray(8192)
+            val ra = a.inputStream().use { it.read(ba) }
+            val rb = b.inputStream().use { it.read(bb) }
+            ra == rb && ra > 0 && ba.copyOf(ra).contentEquals(bb.copyOf(rb))
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Swaps [f] for a symlink to [canonical] (relative target - valid both
+     * in the guest and when the app walks the tree from the host). If even
+     * the symlink cannot be created, an empty placeholder is left behind so
+     * repairEmptyHardlinks() can heal the name on the next session instead
+     * of it vanishing for good.
+     */
+    private fun replaceWithSymlink(f: File, canonical: File): Int {
+        val parent = f.parentFile ?: return 0
+        return try {
+            if (!f.delete()) return 0
+            Os.symlink(canonical.relativeTo(parent).path, f.absolutePath)
+            1
+        } catch (_: Exception) {
+            try {
+                Os.link(canonical.absolutePath, f.absolutePath)
+            } catch (_: Exception) {
+                try { f.createNewFile() } catch (_: Exception) {}
+            }
+            0
+        }
+    }
 }

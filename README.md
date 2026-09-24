@@ -3,7 +3,7 @@
 Изолированный терминал с Ubuntu 26.04 под PRoot для Android (arm64).
 Работает без root — в основе лежит эмуляция chroot через `proot`.
 
-📦 **Скачать APK**: [TerminalFree-v1.3.2.apk](https://github.com/Flawl3ssss/terminal-free/releases/download/v1.3.2/TerminalFree-v1.3.2.apk)
+📦 **Скачать APK**: [TerminalFree-v1.3.3.apk](https://github.com/Flawl3ssss/terminal-free/releases/download/v1.3.3/TerminalFree-v1.3.3.apk)
 
 - **Изоляция**: контейнер не видит папки телефона. Никаких биндов
   `/sdcard`, `/storage`, `/mnt`, `/data`; приложение не запрашивает

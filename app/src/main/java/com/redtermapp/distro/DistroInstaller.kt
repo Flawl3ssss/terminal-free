@@ -388,15 +388,15 @@ class DistroInstaller(private val context: Context) {
                     try {
                         android.system.Os.link(src.absolutePath, target.absolutePath)
                     } catch (e: Exception) {
-                        // Fallback: copy the target content.
+                        // NEVER fall back to a full copy: 114 applets x 10.6 MB
+                        // = 1.19 GB of real duplicates (link() does get
+                        // rejected on device). A symlink keeps argv[0]
+                        // dispatch intact and costs a few bytes.
                         try {
-                            src.copyTo(target, overwrite = true)
-                            val perm = entry.mode and 0x1FF
-                            target.setReadable(true, true)
-                            target.setExecutable((perm and 0b001001001) != 0, true)
-                            target.setWritable(true, true)
+                            val rel = src.relativeTo(target.parentFile ?: dest).path
+                            android.system.Os.symlink(rel, target.absolutePath)
                         } catch (e2: Exception) {
-                            Log.w("DistroInstaller", "Hardlink failed ${entry.name}: ${e2.message}")
+                            Log.w("DistroInstaller", "Hardlink failed ${entry.name}: link=${e.message} sym=${e2.message}")
                         }
                     }
                 } else {
@@ -539,13 +539,11 @@ class DistroInstaller(private val context: Context) {
                 android.system.Os.link(src.absolutePath, empty.absolutePath)
                 fixed++
             } catch (e: Exception) {
-                Log.w("DistroInstaller", "relink ${empty.name} failed: ${e.message}")
+                Log.w("DistroInstaller", "relink ${empty.name}: link failed (${e.message}), trying symlink")
                 try {
                     empty.delete()
-                    src.copyTo(empty, overwrite = true)
-                    empty.setReadable(true, true)
-                    empty.setWritable(true, true)
-                    empty.setExecutable((src.canExecute()), true)
+                    val rel = src.relativeTo(empty.parentFile ?: src.parentFile).path
+                    android.system.Os.symlink(rel, empty.absolutePath)
                     fixed++
                 } catch (_: Exception) {
                 }
@@ -578,6 +576,17 @@ class DistroInstaller(private val context: Context) {
                 File(rootfs, ".perms_fixed").writeText("1")
             } catch (_: Exception) {}
             repairs.add("Fixed directory permissions")
+        }
+
+        // v1.3.3: link() was rejected on device and both fallbacks (the
+        // extractor and repairEmptyHardlinks below) silently copied whole
+        // files - 115 multicall applets became 1.19 GB of REAL duplicates
+        // (/usr = 1.44 GB instead of ~270 MB). Collapse byte-identical
+        // copies in the fixed paths first, then let relink/flatten work.
+        val collapsed = FsUtil.collapseDuplicates(rootfs)
+        if (collapsed > 0) {
+            repairs.add("Collapsed $collapsed duplicate binaries")
+            try { File(rootfs, ".tf_links_flat").delete() } catch (_: Exception) {}
         }
 
         val relinked = repairEmptyHardlinks(rootfs)

@@ -48,6 +48,12 @@ class BrowserActivity : AppCompatActivity() {
         private const val ZOOM_MAX = 300
         private const val ZOOM_STEP = 15
         private const val FILE_CHOOSER_REQ = 0x7101
+
+        fun launch(context: Context, url: String? = null) {
+            context.startActivity(Intent(context, BrowserActivity::class.java).apply {
+                if (url != null) putExtra(EXTRA_URL, url)
+            })
+        }
     }
 
     private lateinit var webView: WebView

@@ -100,7 +100,14 @@ class TerminalActivity : AppCompatActivity() {
     private fun wireBackend(backend: TerminalBackend) {
         backend.onSessionFinished = { finishedSession -> handleSessionFinished(finishedSession) }
         backend.onLinkTap = { link, isPath -> handleLinkTap(link, isPath) }
-        backend.onModifiersChanged = { updateModifierButtons() }
+        backend.onModifiersChanged = {
+            // The backend may auto-release a latch after a code point, so the
+            // activity mirrors its state instead of keeping an independent one.
+            val active = focusedBackend() ?: backend
+            ctrlActive = active.isCtrlLatched
+            altActive = active.isAltLatched
+            updateModifierButtons()
+        }
         backend.onRequestKeyboard = { target -> showKeyboard(target) }
         backend.imeVisibleProvider = { imeVisible }
     }
@@ -499,8 +506,11 @@ class TerminalActivity : AppCompatActivity() {
     private fun updateKeyboardButton() {
         if (!::keyboardToggle.isInitialized) return
         keyboardToggle.alpha = if (imeVisible) 1.0f else 0.7f
+        // Accent is hardcoded: the app's own theme attrs only cover
+        // terminalBg/terminalText/extraKeys*, and R.attr.colorPrimary is
+        // appcompat's (not resolvable through this module's R).
         val tint = if (imeVisible) {
-            tc(R.attr.colorPrimary, 0xFF89B4FA.toInt())
+            0xFF89B4FA.toInt()
         } else {
             tc(R.attr.terminalText, 0xFFCDD6F4.toInt())
         }

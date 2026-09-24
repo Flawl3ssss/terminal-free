@@ -229,20 +229,23 @@ class TerminalBackend(
         // callback, so releasing a latched CTRL/ALT here still lets the current
         // key go out modified - and the next key starts clean. Without this a
         // forgotten latch would keep typing control codes.
-        if (ctrlActive || altActive) releaseModifiers()
+        releaseModifiers()
         return false
     }
 
+    /** True while the extra-keys CTRL/ALT latch is held down. */
+    val isCtrlLatched: Boolean get() = ctrlDown
+    val isAltLatched: Boolean get() = altDown
+
     /** Drops a latched CTRL/ALT and repaints the extra-keys row. */
     fun releaseModifiers() {
-        if (!ctrlActive && !altActive) return
-        ctrlActive = false
-        altActive = false
-        setCtrl(false)
-        setAlt(false)
+        if (!ctrlDown && !altDown) return
+        ctrlDown = false
+        altDown = false
         onModifiersChanged?.invoke()
     }
 
+    /** Fired whenever the latch state changes, so the UI can follow. */
     var onModifiersChanged: (() -> Unit)? = null
 
     override fun onEmulatorSet() {}

@@ -213,25 +213,10 @@ oom_kill 0
         }
     }
 
-    private fun getAndroidDnsServers(context: Context): List<String> =
-        DnsHelper.getAndroidDnsServers(context)
-
     private fun writeResolvConf(context: Context, rootfs: File) {
         val resolv = File(rootfs, "etc/resolv.conf")
         resolv.parentFile?.mkdirs()
-        val lines = mutableListOf<String>()
-        val dns = getAndroidDnsServers(context)
-        for (s in dns) {
-            lines.add("nameserver $s")
-        }
-        if (dns.size < 3) {
-            for (fallback in listOf("8.8.8.8", "1.1.1.1")) {
-                if (!lines.any { it.contains(fallback) }) {
-                    lines.add("nameserver $fallback")
-                }
-            }
-        }
-        resolv.writeText(lines.joinToString("\n") + "\n")
+        resolv.writeText(DnsHelper.resolvConfText(context))
     }
 
     private fun writeSupplementaryGroups(rootfs: File) {

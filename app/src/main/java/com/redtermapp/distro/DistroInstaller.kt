@@ -437,25 +437,10 @@ class DistroInstaller(private val context: Context) {
         }
     }
 
-    private fun getAndroidDnsServers(): List<String> =
-        DnsHelper.getAndroidDnsServers(context)
-
     private fun writeResolvConf(rootfs: File) {
         val resolv = File(rootfs, "etc/resolv.conf")
         resolv.parentFile?.mkdirs()
-        val lines = mutableListOf<String>()
-        val dns = getAndroidDnsServers()
-        for (s in dns) {
-            lines.add("nameserver $s")
-        }
-        if (dns.size < 3) {
-            for (fallback in listOf("8.8.8.8", "1.1.1.1")) {
-                if (!lines.any { it.contains(fallback) }) {
-                    lines.add("nameserver $fallback")
-                }
-            }
-        }
-        safeWriteText(resolv, lines.joinToString("\n") + "\n")
+        safeWriteText(resolv, DnsHelper.resolvConfText(context))
     }
 
     private fun ensureSupplementaryGroups(rootfs: File) {
@@ -688,16 +673,20 @@ class DistroInstaller(private val context: Context) {
         }
 
         val resolv = File(rootfs, "etc/resolv.conf")
-        if (!resolv.exists()) {
-            writeResolvConf(rootfs)
-            repairs.add("Created etc/resolv.conf with Android DNS")
-        } else {
-            val dns = getAndroidDnsServers()
-            val content = resolv.readText()
-            val needsDns = dns.any { !content.contains(it) }
-            if (needsDns) {
+        val expectedDns = DnsHelper.resolvConfText(context)
+        val currentDns = try {
+            if (resolv.exists()) resolv.readText() else null
+        } catch (_: Exception) {
+            null
+        }
+        when {
+            currentDns == null -> {
                 writeResolvConf(rootfs)
-                repairs.add("Updated etc/resolv.conf with Android DNS")
+                repairs.add("Created etc/resolv.conf with Android DNS")
+            }
+            currentDns != expectedDns -> {
+                writeResolvConf(rootfs)
+                repairs.add("Updated etc/resolv.conf (Android DNS + resolver options)")
             }
         }
 

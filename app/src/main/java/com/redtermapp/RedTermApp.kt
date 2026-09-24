@@ -30,7 +30,7 @@ class RedTermApp : Application() {
         // single screen can turn it back off; it only takes effect while
         // our window is visible - backgrounding the app lets the display
         // sleep normally.
-        registerActivityLifecycleCallbacks(object : android.app.ActivityLifecycleCallbacks {
+        registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: android.app.Activity) {
                 activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }

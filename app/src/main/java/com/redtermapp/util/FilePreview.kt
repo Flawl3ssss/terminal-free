@@ -83,11 +83,13 @@ object FilePreview {
         }
         val truncated = off > TEXT_MAX
         val shown = String(buf, 0, if (truncated) TEXT_MAX else off, Charsets.UTF_8)
-        val text = if (truncated) {
+        // NB: named `content`, not `text` - a local `text` would shadow the
+        // TextView's `text` property inside apply {} and fail to compile.
+        val content = if (truncated) {
             "// First 300 KB of ${humanSize(file.length())} — truncated.\n\n$shown"
         } else shown
         val tv = TextView(context).apply {
-            text = text
+            text = content
             typeface = Typeface.MONOSPACE
             textSize = 13f
             setPadding(32, 24, 32, 24)

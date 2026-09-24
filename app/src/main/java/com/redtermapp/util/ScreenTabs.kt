@@ -22,9 +22,14 @@ import com.redtermapp.ui.TerminalActivity
 object ScreenTabs {
 
     fun attach(activity: AppCompatActivity, activeId: Int) {
-        // colorPrimary lives in the Material library's R, not the app's.
-        val activeColor = resolveColor(activity, com.google.android.material.R.attr.colorPrimary)
-        val idleColor = resolveColor(activity, R.attr.terminalText)
+        // colorPrimary is NOT in this module's R (only terminalBg/terminalText/
+        // extraKeys* are - see attrs.xml and TerminalActivity.updateKeyboardButton):
+        // the bare "colorPrimary" theme items bind to appcompat's or the
+        // framework's attr id, so try both before falling back.
+        val activeColor = resolveColor(activity, androidx.appcompat.R.attr.colorPrimary)
+            ?: frameworkAttr(activity, "colorPrimary")
+            ?: ACCENT_FALLBACK
+        val idleColor = resolveColor(activity, R.attr.terminalText) ?: IDLE_FALLBACK
         val targets = mapOf<Int, Class<*>>(
             R.id.tab_terminal to TerminalActivity::class.java,
             R.id.tab_browser to BrowserActivity::class.java,
@@ -48,12 +53,16 @@ object ScreenTabs {
         }
     }
 
-    private fun resolveColor(activity: AppCompatActivity, attr: Int): Int {
+    private fun resolveColor(activity: AppCompatActivity, attr: Int): Int? {
         val tv = TypedValue()
-        return if (activity.theme.resolveAttribute(attr, tv, true)) {
-            tv.data
-        } else {
-            0xFFCDD6F4.toInt()
-        }
+        return if (activity.theme.resolveAttribute(attr, tv, true)) tv.data else null
     }
+
+    private fun frameworkAttr(activity: AppCompatActivity, name: String): Int? {
+        val id = activity.resources.getIdentifier(name, "attr", "android")
+        return if (id != 0) resolveColor(activity, id) else null
+    }
+
+    private val ACCENT_FALLBACK = 0xFF89B4FA.toInt()   // Catppuccin blue
+    private val IDLE_FALLBACK = 0xFFCDD6F4.toInt()
 }

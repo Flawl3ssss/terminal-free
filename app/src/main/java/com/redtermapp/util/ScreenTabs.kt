@@ -22,7 +22,8 @@ import com.redtermapp.ui.TerminalActivity
 object ScreenTabs {
 
     fun attach(activity: AppCompatActivity, activeId: Int) {
-        val activeColor = resolveColor(activity, R.attr.colorPrimary)
+        // colorPrimary lives in the Material library's R, not the app's.
+        val activeColor = resolveColor(activity, com.google.android.material.R.attr.colorPrimary)
         val idleColor = resolveColor(activity, R.attr.terminalText)
         val targets = mapOf<Int, Class<*>>(
             R.id.tab_terminal to TerminalActivity::class.java,

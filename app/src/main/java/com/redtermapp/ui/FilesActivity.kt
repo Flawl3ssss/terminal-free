@@ -350,11 +350,13 @@ class FilesActivity : AppCompatActivity() {
     private fun fileActions(e: Entry) {
         if (tab == Tab.WORKSPACE) {
             val items = arrayOf(
+                getString(R.string.files_preview),
                 getString(R.string.files_export_to_device),
                 getString(R.string.rename),
                 getString(R.string.delete)
             )
             val actions = arrayOf<() -> Unit>(
+                { e.file?.let { f -> com.redtermapp.util.FilePreview.show(this, f) } },
                 { exportToDevice(e) },
                 { renameEntry(e) },
                 { confirmDelete(e) }
@@ -365,11 +367,13 @@ class FilesActivity : AppCompatActivity() {
                 .show()
         } else {
             val items = arrayOf(
+                getString(R.string.files_preview),
                 getString(R.string.files_import_action),
                 getString(R.string.rename),
                 getString(R.string.delete)
             )
             val actions = arrayOf<() -> Unit>(
+                { e.file?.let { f -> com.redtermapp.util.FilePreview.show(this, f) } },
                 { importDeviceEntry(e) },
                 { renameEntry(e) },
                 { confirmDelete(e) }

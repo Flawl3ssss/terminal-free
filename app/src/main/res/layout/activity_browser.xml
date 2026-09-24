@@ -93,6 +93,23 @@
             android:id="@+id/browser_webview"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
+
+        <!-- Old bottom toolbar (zoom/find/share/home) collapsed into one
+             overflow button, per user request: the page gets all the space. -->
+        <TextView
+            android:id="@+id/browser_menu_btn"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_keyboard_chip"
+            android:contentDescription="@string/browser_menu"
+            android:elevation="6dp"
+            android:gravity="center"
+            android:text="@string/browser_overflow"
+            android:textColor="?attr/terminalText"
+            android:textSize="22sp" />
     </FrameLayout>
 
     <!-- Find in page -->
@@ -164,85 +181,4 @@
             android:textColor="?attr/terminalText"
             android:textSize="15sp" />
     </LinearLayout>
-
-    <!-- Bottom toolbar -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="52dp"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:background="?attr/extraKeysBg">
-
-        <TextView
-            android:id="@+id/browser_zoom_out"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:contentDescription="@string/browser_zoom_out"
-            android:gravity="center"
-            android:text="@string/browser_zoom_out_label"
-            android:textColor="?attr/terminalText"
-            android:textSize="24sp"
-            android:background="?attr/selectableItemBackground" />
-
-        <TextView
-            android:id="@+id/browser_zoom_label"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1.2"
-            android:contentDescription="@string/browser_zoom_reset"
-            android:gravity="center"
-            android:text="@string/browser_zoom_level"
-            android:textColor="?attr/colorPrimary"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:background="?attr/selectableItemBackground" />
-
-        <TextView
-            android:id="@+id/browser_zoom_in"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:contentDescription="@string/browser_zoom_in"
-            android:gravity="center"
-            android:text="@string/browser_zoom_in_label"
-            android:textColor="?attr/terminalText"
-            android:textSize="24sp"
-            android:background="?attr/selectableItemBackground" />
-
-        <TextView
-            android:id="@+id/browser_find_btn"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:contentDescription="@string/browser_find_in_page"
-            android:gravity="center"
-            android:text="@string/browser_find_in_page"
-            android:textColor="?attr/terminalText"
-            android:textSize="13sp"
-            android:background="?attr/selectableItemBackground" />
-
-        <TextView
-            android:id="@+id/browser_share"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="@string/browser_share"
-            android:textColor="?attr/terminalText"
-            android:textSize="13sp"
-            android:background="?attr/selectableItemBackground" />
-
-        <TextView
-            android:id="@+id/browser_home"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="@string/browser_home"
-            android:textColor="?attr/terminalText"
-            android:textSize="13sp"
-            android:background="?attr/selectableItemBackground" />
-    </LinearLayout>
-
 </LinearLayout>

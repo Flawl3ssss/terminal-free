@@ -25,6 +25,23 @@ class RedTermApp : Application() {
         }
         createNotificationChannel()
 
+        // The display must never sleep while ANY of our screens is in the
+        // foreground (v1.3.4 request). Re-applied on every resume, so no
+        // single screen can turn it back off; it only takes effect while
+        // our window is visible - backgrounding the app lets the display
+        // sleep normally.
+        registerActivityLifecycleCallbacks(object : android.app.ActivityLifecycleCallbacks {
+            override fun onActivityResumed(activity: android.app.Activity) {
+                activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+            override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) {}
+            override fun onActivityStarted(activity: android.app.Activity) {}
+            override fun onActivityPaused(activity: android.app.Activity) {}
+            override fun onActivityStopped(activity: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) {}
+            override fun onActivityDestroyed(activity: android.app.Activity) {}
+        })
+
         // Drop leftover base images (~93 MB each) from older versions on a
         // background thread - they are not needed once the rootfs exists.
         Thread {

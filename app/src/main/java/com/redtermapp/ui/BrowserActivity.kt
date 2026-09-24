@@ -44,6 +44,7 @@ class BrowserActivity : AppCompatActivity() {
 
         private const val PREFS = "browser_prefs"
         private const val KEY_TEXT_ZOOM = "text_zoom"
+        private const val KEY_LAST_URL = "last_url"
         private const val ZOOM_MIN = 50
         private const val ZOOM_MAX = 300
         private const val ZOOM_STEP = 15
@@ -65,7 +66,6 @@ class BrowserActivity : AppCompatActivity() {
     private lateinit var findBar: View
     private lateinit var findInput: EditText
     private lateinit var findCount: TextView
-    private lateinit var zoomLabel: TextView
 
     private var textZoom = 100
     private var pageLoading = false
@@ -84,7 +84,6 @@ class BrowserActivity : AppCompatActivity() {
         findBar = findViewById(R.id.browser_find_bar)
         findInput = findViewById(R.id.browser_find_input)
         findCount = findViewById(R.id.browser_find_count)
-        zoomLabel = findViewById(R.id.browser_zoom_label)
 
         textZoom = getSharedPreferences(PREFS, MODE_PRIVATE)
             .getInt(KEY_TEXT_ZOOM, 100)
@@ -94,14 +93,16 @@ class BrowserActivity : AppCompatActivity() {
         setupFindBar()
         setupButtons()
 
-        updateZoomLabel()
         updateReloadButton()
         updateNavState()
 
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState)
         } else {
-            loadFrom(intent.getStringExtra(EXTRA_URL) ?: DEFAULT_URL)
+            // The last visited page survives app restarts (saved on every
+            // finished load); an explicit EXTRA_URL (dsh, share intents)
+            // still wins over it.
+            loadFrom(intent.getStringExtra(EXTRA_URL) ?: lastUrl() ?: DEFAULT_URL)
         }
     }
 
@@ -156,6 +157,7 @@ class BrowserActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 if (url != null && !urlInput.hasFocus()) urlInput.setText(url)
+                persistUrl(url)
                 pageLoading = false
                 updateReloadButton()
                 updateNavState()
@@ -276,21 +278,7 @@ class BrowserActivity : AppCompatActivity() {
             if (hasFocus) v.post { urlInput.selectAll() }
         }
 
-        findViewById<View>(R.id.browser_zoom_out).setOnClickListener {
-            applyTextZoom(textZoom - ZOOM_STEP)
-        }
-        findViewById<View>(R.id.browser_zoom_in).setOnClickListener {
-            applyTextZoom(textZoom + ZOOM_STEP)
-        }
-        zoomLabel.setOnClickListener { applyTextZoom(100) }
-
-        findViewById<View>(R.id.browser_find_btn).setOnClickListener {
-            if (findBar.visibility == View.VISIBLE) closeFindBar() else openFindBar()
-        }
-
-        findViewById<View>(R.id.browser_share).setOnClickListener { shareCurrentUrl() }
-
-        findViewById<View>(R.id.browser_home).setOnClickListener { loadFrom(DEFAULT_URL) }
+        findViewById<View>(R.id.browser_menu_btn).setOnClickListener { openOverflowMenu() }
     }
 
     // ------------------------------------------------------------------
@@ -300,16 +288,56 @@ class BrowserActivity : AppCompatActivity() {
     private fun applyTextZoom(newZoom: Int) {
         textZoom = newZoom.coerceIn(ZOOM_MIN, ZOOM_MAX)
         webView.settings.textZoom = textZoom
-        updateZoomLabel()
+        // The zoom % label lived in the old bottom bar; a toast replaces it.
+        Toast.makeText(this, getString(R.string.browser_zoom_percent, textZoom), Toast.LENGTH_SHORT).show()
         getSharedPreferences(PREFS, MODE_PRIVATE)
             .edit()
             .putInt(KEY_TEXT_ZOOM, textZoom)
             .apply()
     }
 
-    private fun updateZoomLabel() {
-        zoomLabel.text = getString(R.string.browser_zoom_percent, textZoom)
+    // ------------------------------------------------------------------
+    // Overflow menu (⋮) - the old bottom toolbar collapsed into one button
+    // ------------------------------------------------------------------
+
+    private fun openOverflowMenu() {
+        val items = arrayOf(
+            getString(R.string.browser_find_in_page),
+            getString(R.string.browser_zoom_out),
+            getString(R.string.browser_zoom_in),
+            getString(R.string.browser_zoom_reset),
+            getString(R.string.browser_share),
+            getString(R.string.browser_home),
+        )
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> if (findBar.visibility == View.VISIBLE) closeFindBar() else openFindBar()
+                    1 -> applyTextZoom(textZoom - ZOOM_STEP)
+                    2 -> applyTextZoom(textZoom + ZOOM_STEP)
+                    3 -> applyTextZoom(100)
+                    4 -> shareCurrentUrl()
+                    5 -> loadFrom(DEFAULT_URL)
+                }
+            }
+            .show()
     }
+
+    // ------------------------------------------------------------------
+    // Last page persistence (survives app restarts / process death)
+    // ------------------------------------------------------------------
+
+    private fun persistUrl(url: String?) {
+        if (url != null && (url.startsWith("http://") || url.startsWith("https://"))) {
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putString(KEY_LAST_URL, url)
+                .apply()
+        }
+    }
+
+    private fun lastUrl(): String? =
+        getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_LAST_URL, null)
 
     // ------------------------------------------------------------------
     // Navigation / reload state
@@ -415,6 +443,7 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        persistUrl(webView.url)
         webView.onPause()
     }
 

@@ -164,6 +164,7 @@ class FilesActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_files)
+        com.redtermapp.util.ScreenTabs.attach(this, R.id.tab_files)
 
         wsRoot = File(filesDir, "workspace").apply { mkdirs() }
         wsDir = wsRoot

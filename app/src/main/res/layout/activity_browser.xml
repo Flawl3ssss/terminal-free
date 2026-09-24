@@ -6,6 +6,11 @@
     android:background="?attr/terminalBg"
     android:fitsSystemWindows="true">
 
+    <include
+        layout="@layout/tab_strip"
+        android:layout_width="match_parent"
+        android:layout_height="42dp" />
+
     <!-- Top bar: history + address + reload/stop -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -70,6 +75,19 @@
             android:scaleType="fitCenter"
             android:src="@drawable/ic_reload"
             android:tint="?attr/terminalText" />
+
+        <!-- Overflow menu (⋮): lives in the top bar now, not floating
+             over the page. -->
+        <TextView
+            android:id="@+id/browser_menu_btn"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/browser_menu"
+            android:gravity="center"
+            android:text="@string/browser_overflow"
+            android:textColor="?attr/terminalText"
+            android:textSize="20sp" />
     </LinearLayout>
 
     <!-- Page load progress -->
@@ -93,23 +111,6 @@
             android:id="@+id/browser_webview"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
-
-        <!-- Old bottom toolbar (zoom/find/share/home) collapsed into one
-             overflow button, per user request: the page gets all the space. -->
-        <TextView
-            android:id="@+id/browser_menu_btn"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_gravity="bottom|end"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="8dp"
-            android:background="@drawable/bg_keyboard_chip"
-            android:contentDescription="@string/browser_menu"
-            android:elevation="6dp"
-            android:gravity="center"
-            android:text="@string/browser_overflow"
-            android:textColor="?attr/terminalText"
-            android:textSize="22sp" />
     </FrameLayout>
 
     <!-- Find in page -->

@@ -28,10 +28,11 @@ import com.redtermapp.R
 /**
  * Built-in browser (WebView).
  *
- * Page scaling here is a *text zoom*: `WebSettings.textZoom` makes the
- * renderer re-flow the document at a different font size, which is what
- * "scale the page" means for real. Pinch zoom (viewport zoom) stays
- * available separately and is not what the −/%/+ controls drive.
+ * No user zoom at all: pinch, double-tap and the built-in zoom controls
+ * are disabled (`supportZoom=false`). The "Scale" menu drives a REAL page
+ * scale - blocks, images, spacing - by rewriting the page's
+ * `meta viewport` to a fixed `initial-scale`; `WebSettings.textZoom`
+ * (font size only) is deliberately NOT used.
  *
  * Also used as the client for the dsh Web UI served by the container at
  * http://127.0.0.1:3080.
@@ -43,11 +44,12 @@ class BrowserActivity : AppCompatActivity() {
         const val DEFAULT_URL = "https://deepseek.com"
 
         private const val PREFS = "browser_prefs"
-        private const val KEY_TEXT_ZOOM = "text_zoom"
+        private const val KEY_PAGE_ZOOM = "page_zoom"
         private const val KEY_LAST_URL = "last_url"
-        private const val ZOOM_MIN = 50
-        private const val ZOOM_MAX = 300
-        private const val ZOOM_STEP = 15
+        // Whole-page scale: multiplicative step, 50%..300% (viewport meta).
+        private const val PAGE_ZOOM_MIN = 0.5f
+        private const val PAGE_ZOOM_MAX = 3.0f
+        private const val ZOOM_FACTOR = 1.15f
         private const val FILE_CHOOSER_REQ = 0x7101
 
         fun launch(context: Context, url: String? = null) {
@@ -67,13 +69,14 @@ class BrowserActivity : AppCompatActivity() {
     private lateinit var findInput: EditText
     private lateinit var findCount: TextView
 
-    private var textZoom = 100
+    private var pageZoom = 1f
     private var pageLoading = false
     private var fileCallback: ValueCallback<Array<Uri>>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_browser)
+        com.redtermapp.util.ScreenTabs.attach(this, R.id.tab_browser)
 
         webView = findViewById(R.id.browser_webview)
         urlInput = findViewById(R.id.browser_url)
@@ -85,9 +88,9 @@ class BrowserActivity : AppCompatActivity() {
         findInput = findViewById(R.id.browser_find_input)
         findCount = findViewById(R.id.browser_find_count)
 
-        textZoom = getSharedPreferences(PREFS, MODE_PRIVATE)
-            .getInt(KEY_TEXT_ZOOM, 100)
-            .coerceIn(ZOOM_MIN, ZOOM_MAX)
+        pageZoom = getSharedPreferences(PREFS, MODE_PRIVATE)
+            .getFloat(KEY_PAGE_ZOOM, 1f)
+            .coerceIn(PAGE_ZOOM_MIN, PAGE_ZOOM_MAX)
 
         setupWebView()
         setupFindBar()
@@ -111,13 +114,14 @@ class BrowserActivity : AppCompatActivity() {
         val s: WebSettings = webView.settings
         s.javaScriptEnabled = true
         s.domStorageEnabled = true
-        s.setSupportZoom(true)
-        s.builtInZoomControls = true
+        // No user zoom at all: no pinch, no double-tap, no zoom buttons.
+        // Page scale is driven by applyViewportScale() instead.
+        s.setSupportZoom(false)
+        s.builtInZoomControls = false
         s.displayZoomControls = false
         s.loadWithOverviewMode = true
         s.useWideViewPort = true
         s.mediaPlaybackRequiresUserGesture = true
-        s.textZoom = textZoom
         // Sandbox: pages must not reach app-private files or content providers.
         s.allowFileAccess = false
         s.allowContentAccess = false
@@ -150,12 +154,17 @@ class BrowserActivity : AppCompatActivity() {
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 super.onPageStarted(view, url, favicon)
+                // Pin the page-scale viewport as early as possible so the
+                // first layout pass already uses it.
+                if (pageZoom != 1f) applyViewportScale()
                 // Never stomp on what the user is typing in the address bar.
                 if (url != null && !urlInput.hasFocus()) urlInput.setText(url)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                // Re-assert after the DOM is complete (dynamic <head> etc.).
+                if (pageZoom != 1f) applyViewportScale()
                 if (url != null && !urlInput.hasFocus()) urlInput.setText(url)
                 persistUrl(url)
                 pageLoading = false
@@ -282,18 +291,59 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     // ------------------------------------------------------------------
-    // Page scale
+    // Page scale - the WHOLE page (blocks, images, text), not just fonts
     // ------------------------------------------------------------------
 
-    private fun applyTextZoom(newZoom: Int) {
-        textZoom = newZoom.coerceIn(ZOOM_MIN, ZOOM_MAX)
-        webView.settings.textZoom = textZoom
-        // The zoom % label lived in the old bottom bar; a toast replaces it.
-        Toast.makeText(this, getString(R.string.browser_zoom_percent, textZoom), Toast.LENGTH_SHORT).show()
+    private fun applyPageZoom(newZoom: Float) {
+        pageZoom = newZoom.coerceIn(PAGE_ZOOM_MIN, PAGE_ZOOM_MAX)
         getSharedPreferences(PREFS, MODE_PRIVATE)
             .edit()
-            .putInt(KEY_TEXT_ZOOM, textZoom)
+            .putFloat(KEY_PAGE_ZOOM, pageZoom)
             .apply()
+        applyViewportScale()
+        Toast.makeText(
+            this,
+            getString(R.string.browser_zoom_percent, Math.round(pageZoom * 100)),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    /**
+     * Rewrites `meta viewport` via JS: a pinned initial-scale zooms the
+     * ENTIRE layout viewport - blocks, images, spacing - which is what a
+     * real page scale is. The site's original content is parked in
+     * `window.__tf_vp` on first touch, so returning to 100% restores it
+     * without a reload. Callers skip this at 100%: no JS on default pages.
+     */
+    private fun applyViewportScale() {
+        val z = pageZoom
+        val js = """
+            (function() {
+                var d = document;
+                if (!d || !d.documentElement) return 'no-document';
+                var w = d.defaultView;
+                var m = d.querySelector('meta[name="viewport"]');
+                if (typeof w.__tf_vp === 'undefined') w.__tf_vp = m ? m.content : null;
+                if ($z === 1.0) {
+                    var orig = w.__tf_vp;
+                    if (m) {
+                        if (orig !== null && orig !== undefined) m.content = orig;
+                        else if (m.parentNode) m.parentNode.removeChild(m);
+                    }
+                    return 'reset';
+                }
+                if (!m) {
+                    m = d.createElement('meta');
+                    m.name = 'viewport';
+                    (d.head || d.documentElement).appendChild(m);
+                }
+                m.content = 'width=device-width, initial-scale=' + $z +
+                    ', minimum-scale=' + $z + ', maximum-scale=' + $z +
+                    ', user-scalable=no';
+                return 'scaled';
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(js, null)
     }
 
     // ------------------------------------------------------------------
@@ -313,9 +363,9 @@ class BrowserActivity : AppCompatActivity() {
             .setItems(items) { _, which ->
                 when (which) {
                     0 -> if (findBar.visibility == View.VISIBLE) closeFindBar() else openFindBar()
-                    1 -> applyTextZoom(textZoom - ZOOM_STEP)
-                    2 -> applyTextZoom(textZoom + ZOOM_STEP)
-                    3 -> applyTextZoom(100)
+                    1 -> applyPageZoom(pageZoom / ZOOM_FACTOR)
+                    2 -> applyPageZoom(pageZoom * ZOOM_FACTOR)
+                    3 -> applyPageZoom(1f)
                     4 -> shareCurrentUrl()
                     5 -> loadFrom(DEFAULT_URL)
                 }

@@ -6,6 +6,11 @@
     android:background="?attr/terminalBg"
     android:fitsSystemWindows="true">
 
+    <include
+        layout="@layout/tab_strip"
+        android:layout_width="match_parent"
+        android:layout_height="42dp" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

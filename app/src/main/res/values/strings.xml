@@ -178,6 +178,9 @@
     <string name="files_search">Search</string>
     <string name="files_search_hint">File or folder name</string>
     <string name="files_search_empty">No matches</string>
+    <string name="tab_terminal">Terminal</string>
+    <string name="tab_browser">Browser</string>
+    <string name="tab_files">Files</string>
     <string name="files_rename_title">Rename</string>
     <string name="files_delete_title">Delete</string>
     <string name="files_delete_msg">Delete \"%1$s\"?</string>
@@ -197,8 +200,8 @@
     <string name="browser_title">Browser</string>
     <string name="browser_url_hint">Search or enter address</string>
     <string name="browser_go">Go</string>
-    <string name="browser_zoom_out">Zoom out</string>
-    <string name="browser_zoom_in">Zoom in</string>
+    <string name="browser_zoom_out">Scale down</string>
+    <string name="browser_zoom_in">Scale up</string>
     <string name="browser_zoom_out_label">−</string>
     <string name="browser_zoom_in_label">+</string>
     <string name="browser_zoom_level">100%</string>
@@ -217,7 +220,7 @@
     <string name="browser_overflow">⋮</string>
     <string name="browser_menu">Menu</string>
     <string name="browser_zoom_level_default">100%</string>
-    <string name="browser_zoom_reset">Reset zoom to 100%</string>
+    <string name="browser_zoom_reset">Reset scale to 100%</string>
     <string name="browser_opened_in_app">Opened in Terminal Free browser</string>
     <string name="browser_nothing_to_share">Nothing to share yet</string>
     <string name="browser_load_failed">Could not load page (%1$d)</string>

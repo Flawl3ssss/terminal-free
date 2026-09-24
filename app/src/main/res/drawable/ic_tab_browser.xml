@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tab icon: globe (circle + meridian + equator). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,3.2C16.86,3.2 20.8,7.14 20.8,12C20.8,16.86 16.86,20.8 12,20.8C7.14,20.8 3.2,16.86 3.2,12C3.2,7.14 7.14,3.2 12,3.2Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.7"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M12,3.2C9,6.5 9,17.5 12,20.8C15,17.5 15,6.5 12,3.2Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.7"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M3.7,12L20.3,12"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.7"
+        android:strokeLineCap="round" />
+</vector>

@@ -150,6 +150,7 @@ class TerminalActivity : AppCompatActivity() {
         applyTheme()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_terminal)
+        com.redtermapp.util.ScreenTabs.attach(this, R.id.tab_terminal)
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
             androidx.core.content.ContextCompat.checkSelfPermission(
@@ -1402,8 +1403,6 @@ exec $prootBin -0 -L -r "$rp" -w ${startInner ?: "/workspace"} --link2symlink --
         menu?.add(0, 9, 0, "Snippets")
         menu?.add(0, 10, 0, "Quick settings")
         menu?.add(0, 11, 0, "Split view")
-        menu?.add(0, 12, 0, "Files")
-        menu?.add(0, 13, 0, "Browser")
         menu?.add(0, 14, 0, "dsh Web")
         return true
     }
@@ -1670,8 +1669,6 @@ exec $prootBin -0 -L -r "$rp" -w ${startInner ?: "/workspace"} --link2symlink --
                 9 -> { showSnippetsDialog(); true }
                 10 -> { toggleQuickPanel(); true }
                 11 -> { toggleSplit(); true }
-                12 -> { startActivity(Intent(this, FilesActivity::class.java)); true }
-                13 -> { BrowserActivity.launch(this); true }
                 14 -> { openDshWebUi(); true }
             else -> super.onOptionsItemSelected(item)
         }

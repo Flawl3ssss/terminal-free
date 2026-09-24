@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import com.google.android.material.card.MaterialCardView
 import com.redtermapp.R
 import com.redtermapp.distro.DistroInstaller
+import com.redtermapp.distro.FsUtil
 
 class MainActivity : AppCompatActivity() {
 
@@ -91,7 +92,7 @@ class MainActivity : AppCompatActivity() {
 
         for (name in installed) {
             val rootfsDir = installer.getRootfsDir(name)
-            val sizeBytes = rootfsDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+            val sizeBytes = FsUtil.uniqueSize(rootfsDir)
             val sizeStr = when {
                 sizeBytes < 1_000_000 -> "${sizeBytes / 1000} KB"
                 sizeBytes < 1_000_000_000 -> "${"%.1f".format(sizeBytes / 1_000_000.0)} MB"

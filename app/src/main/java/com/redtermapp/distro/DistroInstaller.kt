@@ -600,6 +600,24 @@ class DistroInstaller(private val context: Context) {
             repairs.add("Repaired $relinked broken hardlinks")
         }
 
+        // v1.3.1: every walker (our size label, du in proot, Android
+        // Settings) counts each hardlink as a full copy - 114 links of one
+        // 10.6 MB rust-coreutils file read as ~1.15 GB that is not on disk.
+        // Swap links for symlinks: the inode stays shared, argv[0] dispatch
+        // (coreutils/perl) is unaffected, and every size report becomes
+        // honest. One-time per rootfs; re-armed if a relink ever happens.
+        val flatMarker = File(rootfs, ".tf_links_flat")
+        if (relinked > 0) {
+            try { flatMarker.delete() } catch (_: Exception) {}
+        }
+        if (!flatMarker.exists()) {
+            val flattened = FsUtil.flattenHardlinks(rootfs)
+            try { flatMarker.writeText("1") } catch (_: Exception) {}
+            if (flattened > 0) {
+                repairs.add("Converted $flattened hardlinks to symlinks")
+            }
+        }
+
         val passwd = File(rootfs, "etc/passwd")
         if (!passwd.exists() || !passwd.readText().contains(":$uid:")) {
             passwd.parentFile?.mkdirs()
